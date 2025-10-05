@@ -2,7 +2,7 @@
 
 import json
 import uvicorn
-from fastapi import FastAPI, Request, HTTPException, Response
+from fastapi import FastAPI, Request, Response
 
 app = FastAPI(
     title="RouterOS Event Receiver",
@@ -16,10 +16,10 @@ async def receive_event(request: Request):
     try:
         content_type = request.headers.get("content-type", "")
         body = await request.body()
-        
+
         print(f"Content-Type: {content_type}")
         print(f"Raw body: {body}")
-        
+
         if content_type.startswith("application/json"):
             data = await request.json()
             print(json.dumps(data, indent=2))
@@ -27,9 +27,9 @@ async def receive_event(request: Request):
             # Handle form data or plain text
             body_str = body.decode('utf-8')
             print(f"Body as string: {body_str}")
-            
+
         return Response(status_code=204)
-    except Exception as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
         print(f"Error processing request: {exc}")
         return Response(status_code=204)  # Still return success to RouterOS
 
