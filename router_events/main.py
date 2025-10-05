@@ -14,11 +14,24 @@ app = FastAPI(
 async def receive_event(request: Request):
     """Receive and process RouterOS events."""
     try:
-        data = await request.json()
-        print(json.dumps(data, indent=2))
+        content_type = request.headers.get("content-type", "")
+        body = await request.body()
+        
+        print(f"Content-Type: {content_type}")
+        print(f"Raw body: {body}")
+        
+        if content_type.startswith("application/json"):
+            data = await request.json()
+            print(json.dumps(data, indent=2))
+        else:
+            # Handle form data or plain text
+            body_str = body.decode('utf-8')
+            print(f"Body as string: {body_str}")
+            
         return Response(status_code=204)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=422, detail="Invalid JSON") from exc
+    except Exception as exc:
+        print(f"Error processing request: {exc}")
+        return Response(status_code=204)  # Still return success to RouterOS
 
 @app.get("/health")
 async def health_check():
