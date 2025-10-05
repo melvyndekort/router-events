@@ -1,8 +1,8 @@
 """Main FastAPI application for RouterOS event processing."""
 
-from fastapi import FastAPI, Request, HTTPException, Response
-import uvicorn
 import json
+import uvicorn
+from fastapi import FastAPI, Request, HTTPException, Response
 
 app = FastAPI(
     title="RouterOS Event Receiver",
@@ -17,8 +17,8 @@ async def receive_event(request: Request):
         data = await request.json()
         print(json.dumps(data, indent=2))
         return Response(status_code=204)
-    except json.JSONDecodeError:
-        raise HTTPException(status_code=422, detail="Invalid JSON")
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail="Invalid JSON") from exc
 
 @app.get("/health")
 async def health_check():
