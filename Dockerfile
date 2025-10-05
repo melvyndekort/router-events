@@ -1,24 +1,27 @@
-# Use Python 3.12 slim image
-FROM python:3.12-slim
+FROM python:3-slim AS base
 
-# Set working directory
-WORKDIR /app
+RUN pip install --upgrade pip
+RUN pip install "poetry>=1.6,<1.7"
 
-# Install poetry
-RUN pip install poetry
+RUN python -m venv /venv
+ENV PATH="/venv/bin:$PATH"
 
-# Copy poetry files
-COPY pyproject.toml poetry.lock* ./
+FROM base AS build
 
-# Configure poetry: don't create virtual env, install dependencies
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-dev --no-interaction --no-ansi
+COPY pyproject.toml poetry.lock ./
+RUN poetry export -f requirements.txt | pip install -r /dev/stdin
 
-# Copy application code
-COPY router_events/ ./router_events/
+COPY . .
+RUN poetry build && pip install dist/*.whl
 
-# Expose the port the app will run on
+FROM python:3-alpine3.19 AS runtime
+
+LABEL org.opencontainers.image.source=https://github.com/melvyndekort/router-events
+
+COPY --from=build /venv /venv
+
+ENV PATH="/venv/bin:$PATH"
+
 EXPOSE 13959
 
-# Run the app
 CMD ["uvicorn", "router_events.main:app", "--host", "0.0.0.0", "--port", "13959"]
