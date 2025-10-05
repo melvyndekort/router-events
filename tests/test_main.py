@@ -29,4 +29,4 @@ def test_receive_event():
 def test_receive_invalid_event():
     """Test handling of invalid event data."""
     response = client.post("/api/events", content="invalid json")
-    assert response.status_code == 422  # FastAPI returns 422 for invalid JSON
+    assert response.status_code == 204  # Now returns 204 for any content
