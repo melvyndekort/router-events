@@ -12,9 +12,9 @@ COPY pyproject.toml poetry.lock ./
 RUN poetry export -f requirements.txt | pip install -r /dev/stdin
 
 COPY . .
-RUN poetry build && pip install dist/*.whl
+RUN pip install .
 
-FROM python:3-alpine3.19 AS runtime
+FROM python:3-slim AS runtime
 
 LABEL org.opencontainers.image.source=https://github.com/melvyndekort/router-events
 
