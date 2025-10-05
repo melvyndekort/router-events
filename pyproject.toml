@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "router-events"
+version = "0.1.0"
+description = "RouterOS event receiver and processor"
+authors = ["Melvyn de Kort <melvyn@mdekort.nl>"]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+fastapi = "^0.115"
+uvicorn = {extras = ["standard"], version = "^0.32"}
+pydantic = "^2.10"
+
+[tool.poetry.dev-dependencies]
+pytest = "^8.4"
+pytest-cov = "^7.0"
+pylint = "^3.3"
+httpx = "^0.28"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
