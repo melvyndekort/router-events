@@ -6,13 +6,14 @@ authors = ["Melvyn de Kort <melvyn@mdekort.nl>"]
 
 [tool.poetry.dependencies]
 python = "^3.9"
-fastapi = "^0.115"
-uvicorn = {extras = ["standard"], version = "^0.32"}
+fastapi = "^0.118"
+uvicorn = {extras = ["standard"], version = "^0.37"}
 pydantic = "^2.10"
 aiomysql = "^0.2"
 httpx = "^0.28"
+sqlalchemy = "^2.0"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 pytest = "^8.4"
 pytest-cov = "^7.0"
 pytest-asyncio = "^0.24"

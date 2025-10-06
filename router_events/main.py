@@ -1,81 +1,142 @@
 """Main FastAPI application for RouterOS event processing."""
 
-import json
 import asyncio
 import time
+import logging
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Set
+from typing import Set
+
 import uvicorn
 import httpx
 from fastapi import FastAPI, Request, Response, HTTPException, BackgroundTasks
 from fastapi.responses import RedirectResponse, FileResponse
-from pydantic import BaseModel
+
 from .database import db
 from .notifications import notifier
+from .schemas import DeviceUpdateRequest, UpdateResponse
 
-class ManufacturerCache:
-    """Cache for manufacturer lookups with rate limiting."""
+logger = logging.getLogger(__name__)
 
-    def __init__(self):
-        self.cache: Dict[str, str] = {}
-        self.last_request_time = 0.0
-        self.pending: Set[str] = set()
 
-    def get(self, mac: str) -> Optional[str]:
-        """Get cached manufacturer."""
-        return self.cache.get(mac)
+class RateLimiter:  # pylint: disable=too-few-public-methods
+    """Simple rate limiter for API requests."""
 
-    def set(self, mac: str, manufacturer: str) -> None:
-        """Set cached manufacturer."""
-        self.cache[mac] = manufacturer
-        self.pending.discard(mac)
+    def __init__(self, interval: float = 0.5):
+        self.interval = interval
+        self.last_request = 0.0
 
-    def is_pending(self, mac: str) -> bool:
-        """Check if MAC is being processed."""
-        return mac in self.pending
+    async def wait_if_needed(self):
+        """Wait if rate limit requires it."""
+        elapsed = time.time() - self.last_request
+        if elapsed < self.interval:
+            await asyncio.sleep(self.interval - elapsed)
+        self.last_request = time.time()
 
-    def add_pending(self, mac: str) -> None:
-        """Mark MAC as being processed."""
-        self.pending.add(mac)
 
-manufacturer_cache = ManufacturerCache()
+# Global state
+rate_limiter = RateLimiter()
+pending_lookups: Set[str] = set()
 
-async def lookup_manufacturer_background(mac: str):
-    """Background task to lookup manufacturer."""
-    if manufacturer_cache.get(mac) or manufacturer_cache.is_pending(mac):
+
+async def lookup_manufacturer(mac: str):
+    """Background manufacturer lookup with rate limiting and multiple APIs."""
+    if mac in pending_lookups:
         return
 
-    manufacturer_cache.add_pending(mac)
+    if not await db.needs_manufacturer_lookup(mac):
+        return
 
-    # Rate limiting: wait at least 0.5 seconds between requests
-    current_time = time.time()
-    if current_time - manufacturer_cache.last_request_time < 0.5:
-        await asyncio.sleep(0.5 - (current_time - manufacturer_cache.last_request_time))
+    pending_lookups.add(mac)
+    try:
+        # Set status to pending to prevent duplicate lookups
+        await db.set_manufacturer(mac, None, 'pending')
+        await rate_limiter.wait_if_needed()
 
-    async with httpx.AsyncClient() as client:
+        # Try multiple APIs in order
+        apis = [
+            f"https://api.macvendors.com/{mac}",
+            f"https://maclookup.app/api/v2/macs/{mac}",
+            f"https://api.maclookup.app/v2/macs/{mac}/company/name"
+        ]
+
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            for api_url in apis:
+                try:
+                    response = await client.get(api_url)
+
+                    if response.status_code == 200:
+                        manufacturer = await _parse_manufacturer_response(response, api_url)
+
+                        if (manufacturer and "Not Found" not in manufacturer
+                            and "error" not in manufacturer.lower()):
+                            await db.set_manufacturer(mac, manufacturer, 'found')
+                            logger.info("Found manufacturer for %s: %s (via %s)",
+                                      mac, manufacturer, api_url)
+                            return
+
+                except (httpx.RequestError, httpx.TimeoutException):
+                    continue  # Try next API
+
+            # All APIs failed or returned no data
+            await db.set_manufacturer(mac, 'Unknown', 'unknown')
+
+    except (httpx.RequestError, httpx.TimeoutException) as e:
+        await db.set_manufacturer(mac, None, 'error')
+        logger.error("Manufacturer lookup failed for %s: %s", mac, e)
+    finally:
+        pending_lookups.discard(mac)
+
+
+async def _parse_manufacturer_response(response, api_url: str) -> str:
+    """Parse manufacturer response based on API type."""
+    if "maclookup.app" in api_url:
+        # Handle JSON response from maclookup.app
         try:
-            manufacturer_cache.last_request_time = time.time()
-            response = await client.get(f"https://api.macvendors.com/{mac}", timeout=5.0)
-            if response.status_code == 200:
-                manufacturer = response.text.strip()
-                if manufacturer and "Not Found" not in manufacturer:
-                    manufacturer_cache.set(mac, manufacturer)
-                    print(f"Found manufacturer for {mac}: {manufacturer}")
-                    return
-            print(f"No manufacturer found for {mac}: status {response.status_code}")
-        except (httpx.RequestError, httpx.TimeoutException) as e:
-            print(f"Error looking up manufacturer for {mac}: {e}")
+            data = response.json()
+            if isinstance(data, dict):
+                return data.get('company') or data.get('companyName') or ""
+            return response.text.strip()
+        except (ValueError, TypeError):
+            return response.text.strip()
+    else:
+        # Handle plain text response
+        return response.text.strip()
 
-    # Cache unknown results too
-    manufacturer_cache.set(mac, "Unknown")
+
+def get_device_attr(device, attr: str, default=None):
+    """Get attribute from device (handles both dict and object)."""
+    if hasattr(device, attr):
+        return getattr(device, attr, default)
+    return device.get(attr, default) if hasattr(device, 'get') else default
+
+
+async def process_device_event(mac: str, ip: str, host: str):
+    """Process device assignment event."""
+    device = await db.get_device(mac)
+
+    if not device:
+        await db.add_device(mac, host or None)
+        await notifier.notify_unknown_device(mac, ip, host)
+        logger.info("New device: %s (%s) -> %s", mac, host or 'unknown', ip)
+    else:
+        device_name = get_device_attr(device, 'name')
+        await db.add_device(mac, host or device_name)
+
+        if get_device_attr(device, 'notify', False):
+            name = device_name or host or 'Unknown'
+            await notifier.notify_tracked_device(name, mac, ip)
+            logger.info("Tracked device: %s -> %s", name, ip)
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Application lifespan handler."""
-    # Startup
+    """Application lifecycle management."""
+    logger.info("Starting RouterOS Event Receiver")
     await db.connect()
     yield
-    # Shutdown (if needed)
+    await db.close()
+    logger.info("Application stopped")
+
 
 app = FastAPI(
     title="RouterOS Event Receiver",
@@ -84,66 +145,55 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-class DeviceUpdate(BaseModel):
-    """Device update model for API requests."""
-    name: Optional[str] = None
-    notify: Optional[bool] = None
 
 @app.get("/")
 async def root():
     """Redirect to devices page."""
     return RedirectResponse(url="/devices.html")
 
+
 @app.get("/devices.html")
 async def devices_page():
     """Serve devices HTML page."""
     return FileResponse("static/devices.html")
 
+
 @app.post("/api/events")
 async def receive_event(request: Request):
     """Receive and process RouterOS events."""
     try:
-        content_type = request.headers.get("content-type", "")
+        if not request.headers.get("content-type", "").startswith("application/json"):
+            return Response(status_code=204)
 
-        if content_type.startswith("application/json"):
-            data = await request.json()
-            host = (data.get('host') or '').strip()
-            mac = data.get('mac', '')
-            ip = data.get('ip', '')
-            action = data.get('action', '')
+        data = await request.json()
+        if data.get('action') == 'assigned' and data.get('mac'):
+            await process_device_event(
+                data['mac'],
+                data.get('ip', ''),
+                (data.get('host') or '').strip()
+            )
 
-            if action == 'assigned' and mac:
-                device = await db.get_device(mac)
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Event processing error: %s", e)
 
-                if not device:
-                    # Unknown device
-                    await db.add_device(mac, host or None)
-                    await notifier.notify_unknown_device(mac, ip, host)
-                    print(f"Unknown device: {mac} ({host or 'no hostname'}) -> {ip}")
-                else:
-                    # Update last seen
-                    await db.add_device(mac, host or device.get('name'))
+    return Response(status_code=204)
 
-                    if device.get('notify'):
-                        device_name = device.get('name') or host or 'Unknown'
-                        await notifier.notify_tracked_device(device_name, mac, ip)
-
-                    device_display = device.get('name') or host or 'no name'
-                    print(f"Known device: {mac} ({device_display}) -> {ip}")
-        else:
-            body = await request.body()
-            print(f"Non-JSON event: {body.decode('utf-8')[:100]}")
-
-        return Response(status_code=204)
-    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
-        print(f"Error processing request: {exc}")
-        return Response(status_code=204)
 
 @app.get("/api/devices")
 async def get_devices():
     """Get all devices."""
-    devices = await db.get_all_devices()
-    return {"devices": devices}
+    devices = await db.get_devices()
+    return {"devices": [
+        {
+            "mac": d.mac,
+            "name": d.name,
+            "notify": d.notify,
+            "first_seen": d.first_seen,
+            "last_seen": d.last_seen
+        }
+        for d in devices
+    ]}
+
 
 @app.get("/api/devices/{mac}")
 async def get_device(mac: str):
@@ -151,41 +201,63 @@ async def get_device(mac: str):
     device = await db.get_device(mac)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
-    return device
+
+    return {
+        "mac": device.mac,
+        "name": device.name,
+        "notify": device.notify,
+        "first_seen": device.first_seen,
+        "last_seen": device.last_seen
+    }
+
 
 @app.put("/api/devices/{mac}")
-async def update_device(mac: str, update: DeviceUpdate):
-    """Update device name or notification settings."""
-    device = await db.get_device(mac)
-    if not device:
-        await db.add_device(mac, update.name, update.notify or False)
-    else:
-        if update.name is not None:
-            await db.update_device_name(mac, update.name)
-        if update.notify is not None:
-            await db.set_device_notify(mac, update.notify)
+async def update_device(mac: str, update: DeviceUpdateRequest):
+    """Update device settings."""
+    if not await db.get_device(mac):
+        await db.add_device(mac, update.name)
 
-    return {"status": "updated"}
+    if update.name is not None:
+        await db.set_device_name(mac, update.name)
+    if update.notify is not None:
+        await db.set_device_notify(mac, update.notify)
+
+    return UpdateResponse(status="updated")
+
 
 @app.get("/api/manufacturer/{mac}")
 async def get_manufacturer(mac: str, background_tasks: BackgroundTasks):
     """Get manufacturer for MAC address."""
-    # Check cache first
-    cached = manufacturer_cache.get(mac)
-    if cached:
-        return {"manufacturer": cached}
+    manufacturer = await db.get_manufacturer(mac)
+    if manufacturer:
+        return {"manufacturer": manufacturer}
 
-    # If not cached and not pending, start background lookup
-    if not manufacturer_cache.is_pending(mac):
-        background_tasks.add_task(lookup_manufacturer_background, mac)
+    if await db.needs_manufacturer_lookup(mac) and mac not in pending_lookups:
+        background_tasks.add_task(lookup_manufacturer, mac)
 
-    # Return loading status for now
     return {"manufacturer": "Loading..."}
+
+
+@app.post("/api/manufacturer/retry")
+async def retry_failed_lookups():
+    """Force retry of all failed manufacturer lookups."""
+    count = await db.retry_failed_manufacturer_lookups()
+    return {"message": f"Reset {count} failed lookups for retry"}
+
+
+@app.post("/api/manufacturer/{mac}/retry")
+async def retry_manufacturer_lookup(mac: str, background_tasks: BackgroundTasks):
+    """Force retry of manufacturer lookup for specific device."""
+    await db.reset_manufacturer_lookup(mac)
+    background_tasks.add_task(lookup_manufacturer, mac)
+    return {"message": f"Manufacturer lookup reset for {mac}"}
+
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=13959)
