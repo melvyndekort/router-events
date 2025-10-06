@@ -1,8 +1,10 @@
 """Main FastAPI application for RouterOS event processing."""
 
 import json
+import asyncio
+import time
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, Dict
 import uvicorn
 import httpx
 from fastapi import FastAPI, Request, Response, HTTPException
@@ -10,6 +12,23 @@ from fastapi.responses import RedirectResponse, FileResponse
 from pydantic import BaseModel
 from .database import db
 from .notifications import notifier
+
+class ManufacturerCache:
+    """Cache for manufacturer lookups with rate limiting."""
+
+    def __init__(self):
+        self.cache: Dict[str, str] = {}
+        self.last_request_time = 0.0
+
+    def get(self, mac: str) -> Optional[str]:
+        """Get cached manufacturer."""
+        return self.cache.get(mac)
+
+    def set(self, mac: str, manufacturer: str) -> None:
+        """Set cached manufacturer."""
+        self.cache[mac] = manufacturer
+
+manufacturer_cache = ManufacturerCache()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -112,17 +131,30 @@ async def update_device(mac: str, update: DeviceUpdate):
 @app.get("/api/manufacturer/{mac}")
 async def get_manufacturer(mac: str):
     """Get manufacturer for MAC address."""
+    # Check cache first
+    cached = manufacturer_cache.get(mac)
+    if cached:
+        return {"manufacturer": cached}
+
+    # Rate limiting: wait at least 1 second between requests
+    current_time = time.time()
+    if current_time - manufacturer_cache.last_request_time < 1.0:
+        await asyncio.sleep(1.0 - (current_time - manufacturer_cache.last_request_time))
+
     async with httpx.AsyncClient() as client:
         try:
-            # Try macvendors.com first
-            response = await client.get(f"https://api.macvendors.com/{mac}", timeout=5.0)
+            manufacturer_cache.last_request_time = time.time()
+            response = await client.get(f"https://api.macvendors.com/{mac}", timeout=10.0)
             if response.status_code == 200:
                 manufacturer = response.text.strip()
                 if manufacturer and "Not Found" not in manufacturer:
+                    manufacturer_cache.set(mac, manufacturer)
                     return {"manufacturer": manufacturer}
         except (httpx.RequestError, httpx.TimeoutException):
             pass
 
+    # Cache unknown results too
+    manufacturer_cache.set(mac, "Unknown")
     return {"manufacturer": "Unknown"}
 
 @app.get("/health")
