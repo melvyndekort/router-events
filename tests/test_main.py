@@ -169,34 +169,24 @@ def test_devices_html_page(client):
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
 
-@patch('router_events.main.httpx.AsyncClient')
-def test_get_manufacturer_success(mock_client, client):
-    """Test successful manufacturer lookup."""
+def test_get_manufacturer_success(client):
+    """Test successful manufacturer lookup from cache."""
     from router_events.main import manufacturer_cache
-    manufacturer_cache.cache.clear()
-    
-    mock_response = AsyncMock()
-    mock_response.status_code = 200
-    mock_response.text = "Apple, Inc."
-    
-    mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+    manufacturer_cache.cache["00:11:22:33:44:55"] = "Apple, Inc."
     
     response = client.get("/api/manufacturer/00:11:22:33:44:55")
     assert response.status_code == 200
     assert response.json() == {"manufacturer": "Apple, Inc."}
 
-@patch('router_events.main.httpx.AsyncClient')
-def test_get_manufacturer_unknown(mock_client, client):
-    """Test manufacturer lookup failure."""
+def test_get_manufacturer_loading(client):
+    """Test manufacturer lookup returns loading for uncached MAC."""
     from router_events.main import manufacturer_cache
     manufacturer_cache.cache.clear()
+    manufacturer_cache.pending.clear()
     
-    import httpx
-    mock_client.return_value.__aenter__.return_value.get = AsyncMock(side_effect=httpx.RequestError("API error"))
-    
-    response = client.get("/api/manufacturer/00:11:22:33:44:55")
+    response = client.get("/api/manufacturer/00:11:22:33:44:99")
     assert response.status_code == 200
-    assert response.json() == {"manufacturer": "Unknown"}
+    assert response.json() == {"manufacturer": "Loading..."}
 
 def test_get_manufacturer_cached(client):
     """Test cached manufacturer lookup."""

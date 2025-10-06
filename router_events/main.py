@@ -4,10 +4,10 @@ import json
 import asyncio
 import time
 from contextlib import asynccontextmanager
-from typing import Optional, Dict
+from typing import Optional, Dict, Set
 import uvicorn
 import httpx
-from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi import FastAPI, Request, Response, HTTPException, BackgroundTasks
 from fastapi.responses import RedirectResponse, FileResponse
 from pydantic import BaseModel
 from .database import db
@@ -19,6 +19,7 @@ class ManufacturerCache:
     def __init__(self):
         self.cache: Dict[str, str] = {}
         self.last_request_time = 0.0
+        self.pending: Set[str] = set()
 
     def get(self, mac: str) -> Optional[str]:
         """Get cached manufacturer."""
@@ -27,8 +28,46 @@ class ManufacturerCache:
     def set(self, mac: str, manufacturer: str) -> None:
         """Set cached manufacturer."""
         self.cache[mac] = manufacturer
+        self.pending.discard(mac)
+
+    def is_pending(self, mac: str) -> bool:
+        """Check if MAC is being processed."""
+        return mac in self.pending
+
+    def add_pending(self, mac: str) -> None:
+        """Mark MAC as being processed."""
+        self.pending.add(mac)
 
 manufacturer_cache = ManufacturerCache()
+
+async def lookup_manufacturer_background(mac: str):
+    """Background task to lookup manufacturer."""
+    if manufacturer_cache.get(mac) or manufacturer_cache.is_pending(mac):
+        return
+
+    manufacturer_cache.add_pending(mac)
+
+    # Rate limiting: wait at least 0.5 seconds between requests
+    current_time = time.time()
+    if current_time - manufacturer_cache.last_request_time < 0.5:
+        await asyncio.sleep(0.5 - (current_time - manufacturer_cache.last_request_time))
+
+    async with httpx.AsyncClient() as client:
+        try:
+            manufacturer_cache.last_request_time = time.time()
+            response = await client.get(f"https://api.macvendors.com/{mac}", timeout=5.0)
+            if response.status_code == 200:
+                manufacturer = response.text.strip()
+                if manufacturer and "Not Found" not in manufacturer:
+                    manufacturer_cache.set(mac, manufacturer)
+                    print(f"Found manufacturer for {mac}: {manufacturer}")
+                    return
+            print(f"No manufacturer found for {mac}: status {response.status_code}")
+        except (httpx.RequestError, httpx.TimeoutException) as e:
+            print(f"Error looking up manufacturer for {mac}: {e}")
+
+    # Cache unknown results too
+    manufacturer_cache.set(mac, "Unknown")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -129,33 +168,19 @@ async def update_device(mac: str, update: DeviceUpdate):
     return {"status": "updated"}
 
 @app.get("/api/manufacturer/{mac}")
-async def get_manufacturer(mac: str):
+async def get_manufacturer(mac: str, background_tasks: BackgroundTasks):
     """Get manufacturer for MAC address."""
     # Check cache first
     cached = manufacturer_cache.get(mac)
     if cached:
         return {"manufacturer": cached}
 
-    # Rate limiting: wait at least 1 second between requests
-    current_time = time.time()
-    if current_time - manufacturer_cache.last_request_time < 1.0:
-        await asyncio.sleep(1.0 - (current_time - manufacturer_cache.last_request_time))
+    # If not cached and not pending, start background lookup
+    if not manufacturer_cache.is_pending(mac):
+        background_tasks.add_task(lookup_manufacturer_background, mac)
 
-    async with httpx.AsyncClient() as client:
-        try:
-            manufacturer_cache.last_request_time = time.time()
-            response = await client.get(f"https://api.macvendors.com/{mac}", timeout=10.0)
-            if response.status_code == 200:
-                manufacturer = response.text.strip()
-                if manufacturer and "Not Found" not in manufacturer:
-                    manufacturer_cache.set(mac, manufacturer)
-                    return {"manufacturer": manufacturer}
-        except (httpx.RequestError, httpx.TimeoutException):
-            pass
-
-    # Cache unknown results too
-    manufacturer_cache.set(mac, "Unknown")
-    return {"manufacturer": "Unknown"}
+    # Return loading status for now
+    return {"manufacturer": "Loading..."}
 
 @app.get("/health")
 async def health_check():
