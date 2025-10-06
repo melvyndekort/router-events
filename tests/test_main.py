@@ -185,7 +185,8 @@ def test_get_manufacturer_success(mock_client, client):
 @patch('router_events.main.httpx.AsyncClient')
 def test_get_manufacturer_unknown(mock_client, client):
     """Test manufacturer lookup failure."""
-    mock_client.return_value.__aenter__.return_value.get = AsyncMock(side_effect=Exception("API error"))
+    import httpx
+    mock_client.return_value.__aenter__.return_value.get = AsyncMock(side_effect=httpx.RequestError("API error"))
     
     response = client.get("/api/manufacturer/00:11:22:33:44:55")
     assert response.status_code == 200
