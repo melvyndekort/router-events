@@ -94,6 +94,14 @@ class Database:
             await session.execute(update(Device).where(Device.mac == mac).values(notify=notify))
             await session.commit()
 
+    async def delete_device(self, mac: str):
+        """Delete device by MAC address."""
+        async with self.session_factory() as session:
+            device = await session.get(Device, mac)
+            if device:
+                await session.delete(device)
+                await session.commit()
+
     async def get_manufacturer(self, mac: str) -> Optional[str]:
         """Get cached manufacturer."""
         async with self.session_factory() as session:

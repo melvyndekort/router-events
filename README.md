@@ -128,6 +128,19 @@ Update device name or notification settings.
 }
 ```
 
+### DELETE /api/devices/{mac}
+Delete device by MAC address.
+
+**Response:**
+```json
+{
+  "status": "deleted"
+}
+```
+
+**Error Response:**
+- Status Code: 404 (Device not found)
+
 ### POST /api/manufacturer/retry
 Force retry of all failed manufacturer lookups.
 
@@ -171,6 +184,7 @@ The web interface displays:
 - Device names (or "Unknown" if not set) - editable inline
 - Notification status - toggle with checkbox
 - First and last seen timestamps
+- Delete buttons for removing devices (with confirmation)
 - Auto-refreshes every 30 seconds
 
 Access the web interface at `http://your-server:13959/` after starting the service.

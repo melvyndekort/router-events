@@ -225,6 +225,16 @@ async def update_device(mac: str, update: DeviceUpdateRequest):
     return UpdateResponse(status="updated")
 
 
+@app.delete("/api/devices/{mac}")
+async def delete_device(mac: str):
+    """Delete device by MAC address."""
+    if not await db.get_device(mac):
+        raise HTTPException(status_code=404, detail="Device not found")
+
+    await db.delete_device(mac)
+    return {"status": "deleted"}
+
+
 @app.get("/api/manufacturer/{mac}")
 async def get_manufacturer(mac: str, background_tasks: BackgroundTasks):
     """Get manufacturer for MAC address."""
