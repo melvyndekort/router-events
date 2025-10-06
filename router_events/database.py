@@ -35,6 +35,18 @@ class Database:
                         last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                     )
                 """)
+                await cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS events (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        mac VARCHAR(17),
+                        ip VARCHAR(45),
+                        host VARCHAR(255),
+                        action VARCHAR(50),
+                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        INDEX idx_mac (mac),
+                        INDEX idx_timestamp (timestamp)
+                    )
+                """)
 
     async def get_device(self, mac: str) -> Optional[Dict[str, Any]]:
         """Get device by MAC address."""
@@ -42,6 +54,13 @@ class Database:
             async with conn.cursor(aiomysql.DictCursor) as cursor:
                 await cursor.execute("SELECT * FROM devices WHERE mac = %s", (mac,))
                 return await cursor.fetchone()
+
+    async def get_all_devices(self) -> list:
+        """Get all devices."""
+        async with self.pool.acquire() as conn:
+            async with conn.cursor(aiomysql.DictCursor) as cursor:
+                await cursor.execute("SELECT * FROM devices ORDER BY last_seen DESC")
+                return await cursor.fetchall()
 
     async def add_device(self, mac: str, name: str = None, notify: bool = False):
         """Add or update device."""

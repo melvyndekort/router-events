@@ -4,7 +4,7 @@ import json
 from contextlib import asynccontextmanager
 from typing import Optional
 import uvicorn
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, HTTPException
 from pydantic import BaseModel
 from .database import db
 from .notifications import notifier
@@ -68,6 +68,20 @@ async def receive_event(request: Request):
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
         print(f"Error processing request: {exc}")
         return Response(status_code=204)
+
+@app.get("/api/devices")
+async def get_devices():
+    """Get all devices."""
+    devices = await db.get_all_devices()
+    return {"devices": devices}
+
+@app.get("/api/devices/{mac}")
+async def get_device(mac: str):
+    """Get device by MAC address."""
+    device = await db.get_device(mac)
+    if not device:
+        raise HTTPException(status_code=404, detail="Device not found")
+    return device
 
 @app.put("/api/devices/{mac}")
 async def update_device(mac: str, update: DeviceUpdate):

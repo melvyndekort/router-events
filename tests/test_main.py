@@ -11,6 +11,7 @@ def client():
     with patch('router_events.main.db') as mock_db:
         mock_db.connect = AsyncMock()
         mock_db.get_device = AsyncMock(return_value=None)
+        mock_db.get_all_devices = AsyncMock(return_value=[])
         mock_db.add_device = AsyncMock()
         mock_db.update_device_name = AsyncMock()
         mock_db.set_device_notify = AsyncMock()
@@ -123,6 +124,38 @@ def test_update_existing_device(mock_db, client):
     response = client.put(f"/api/devices/{mac}", json=update_data)
     assert response.status_code == 200
     assert response.json() == {"status": "updated"}
+
+@patch('router_events.main.db')
+def test_get_all_devices(mock_db, client):
+    """Test getting all devices."""
+    mock_devices = [
+        {"mac": "00:11:22:33:44:55", "name": "Device 1"},
+        {"mac": "00:11:22:33:44:66", "name": "Device 2"}
+    ]
+    mock_db.get_all_devices = AsyncMock(return_value=mock_devices)
+    
+    response = client.get("/api/devices")
+    assert response.status_code == 200
+    assert response.json() == {"devices": mock_devices}
+
+@patch('router_events.main.db')
+def test_get_device_found(mock_db, client):
+    """Test getting existing device."""
+    mock_device = {"mac": "00:11:22:33:44:55", "name": "Test Device"}
+    mock_db.get_device = AsyncMock(return_value=mock_device)
+    
+    response = client.get("/api/devices/00:11:22:33:44:55")
+    assert response.status_code == 200
+    assert response.json() == mock_device
+
+@patch('router_events.main.db')
+def test_get_device_not_found(mock_db, client):
+    """Test getting non-existent device."""
+    mock_db.get_device = AsyncMock(return_value=None)
+    
+    response = client.get("/api/devices/00:11:22:33:44:55")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Device not found"}
 
 def test_update_new_device(client):
     """Test updating non-existent device."""
