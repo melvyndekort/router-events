@@ -19,6 +19,7 @@ FROM python:3-slim AS runtime
 LABEL org.opencontainers.image.source=https://github.com/melvyndekort/router-events
 
 COPY --from=build /venv /venv
+COPY static /static
 
 ENV PATH="/venv/bin:$PATH"
 
