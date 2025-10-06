@@ -6,6 +6,9 @@ A FastAPI-based service for receiving and processing events from RouterOS device
 
 - FastAPI web framework for high performance
 - Event receiving endpoint for RouterOS webhooks
+- MariaDB integration for device tracking
+- ntfy notifications for unknown and tracked devices
+- Device management API for manual naming
 - Health check endpoint for monitoring
 - Docker support for easy deployment
 - Comprehensive test suite
@@ -47,10 +50,7 @@ Receives RouterOS events via webhook.
 **Request Body:**
 ```json
 {
-  "type": "dhcp",
   "action": "assigned",
-  "dhcpServer": "dhcp-data",
-  "interface": "data",
   "mac": "00:11:22:33:44:55",
   "ip": "192.168.1.100",
   "host": "test-device"
@@ -58,9 +58,23 @@ Receives RouterOS events via webhook.
 ```
 
 **Response:**
+- Status Code: 204 (No Content)
+
+### PUT /api/devices/{mac}
+Update device name or notification settings.
+
+**Request Body:**
 ```json
 {
-  "status": "ok"
+  "name": "My Device",
+  "notify": true
+}
+```
+
+**Response:**
+```json
+{
+  "status": "updated"
 }
 ```
 
@@ -82,17 +96,24 @@ Health check endpoint for monitoring.
 router-events/
 ├── router_events/          # Main package
 │   ├── __init__.py
-│   └── main.py            # FastAPI application
+│   ├── main.py            # FastAPI application
+│   ├── database.py        # Database operations
+│   └── notifications.py   # Notification service
 ├── tests/                 # Test suite
 │   ├── __init__.py
 │   ├── conftest.py
-│   └── test_main.py
+│   ├── test_main.py
+│   ├── test_database.py
+│   ├── test_notifications.py
+│   ├── test_models.py
+│   └── test_edge_cases.py
 ├── examples/              # Example scripts
 │   └── routeros/          # RouterOS example scripts
 ├── .github/               # GitHub workflows and config
 ├── pyproject.toml         # Poetry configuration
 ├── Dockerfile             # Docker configuration
 ├── Makefile              # Build automation
+├── .env.example          # Environment configuration example
 └── README.md
 ```
 
@@ -135,16 +156,31 @@ poetry run isort router_events tests
 
 The application can be configured through environment variables:
 
+### Server Configuration
 - `HOST` - Server host (default: 0.0.0.0)
 - `PORT` - Server port (default: 13959)
 - `LOG_LEVEL` - Logging level (default: INFO)
+
+### Database Configuration
+- `DB_HOST` - MariaDB host (default: localhost)
+- `DB_PORT` - MariaDB port (default: 3306)
+- `DB_USER` - Database user (default: router_events)
+- `DB_PASSWORD` - Database password (required)
+- `DB_NAME` - Database name (default: router_events)
+
+### Notification Configuration
+- `NTFY_URL` - ntfy server URL (default: https://ntfy.sh)
+- `NTFY_TOPIC` - ntfy topic name (default: router-events)
+- `NTFY_ENABLED` - Enable notifications (default: true)
+
+Copy `.env.example` to `.env` and configure your settings.
 
 ## RouterOS Configuration
 
 To send events from RouterOS to this service, configure a webhook in your RouterOS device:
 
 ```
-/system script add name=dhcp-notify source=":local mac \$leaseActMAC; :local ip \$leaseActIP; :local dhcpServer \$leaseServerName; :local interface \"\"; :local eventType \"dhcp\"; :local host \"\"; :local action \"unknown\"; :do {:set interface [/ip dhcp-server get [find name=\$dhcpServer] interface]} on-error={:set interface \"\"}; :do {:local leaseId [/ip dhcp-server lease find mac-address=\$mac]; :if ([:len \$leaseId] > 0) do={:set host [/ip dhcp-server lease get \$leaseId host-name]; :set action \"assigned\"} else={:set action \"released\"}} on-error={:set host \"\"; :set action \"error\"}; /tool fetch url=\"http://your-server:13959/api/events\" http-method=post http-data=\"{\\\"type\\\":\\\"\$eventType\\\",\\\"action\\\":\\\"\$action\\\",\\\"dhcpServer\\\":\\\"\$dhcpServer\\\",\\\"interface\\\":\\\"\$interface\\\",\\\"mac\\\":\\\"\$mac\\\",\\\"ip\\\":\\\"\$ip\\\",\\\"host\\\":\\\"\$host\\\"}\" http-header-field=\"Content-Type: application/json\" keep-result=no"
+/system script add name=dhcp-notify source=":local mac \$leaseActMAC; :local ip \$leaseActIP; :local host \"\"; :local action \"assigned\"; :do {:local leaseId [/ip dhcp-server lease find mac-address=\$mac]; :if ([:len \$leaseId] > 0) do={:set host [/ip dhcp-server lease get \$leaseId host-name]}} on-error={:set host \"\"}; /tool fetch url=\"http://your-server:13959/api/events\" http-method=post http-data=\"{\\\"action\\\":\\\"\$action\\\",\\\"mac\\\":\\\"\$mac\\\",\\\"ip\\\":\\\"\$ip\\\",\\\"host\\\":\\\"\$host\\\"}\" http-header-field=\"Content-Type: application/json\" keep-result=no"
 ```
 
 Replace `your-server` with your actual server IP address.
