@@ -169,6 +169,28 @@ def test_devices_html_page(client):
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
 
+@patch('router_events.main.httpx.AsyncClient')
+def test_get_manufacturer_success(mock_client, client):
+    """Test successful manufacturer lookup."""
+    mock_response = AsyncMock()
+    mock_response.status_code = 200
+    mock_response.text = "Apple, Inc."
+    
+    mock_client.return_value.__aenter__.return_value.get = AsyncMock(return_value=mock_response)
+    
+    response = client.get("/api/manufacturer/00:11:22:33:44:55")
+    assert response.status_code == 200
+    assert response.json() == {"manufacturer": "Apple, Inc."}
+
+@patch('router_events.main.httpx.AsyncClient')
+def test_get_manufacturer_unknown(mock_client, client):
+    """Test manufacturer lookup failure."""
+    mock_client.return_value.__aenter__.return_value.get = AsyncMock(side_effect=Exception("API error"))
+    
+    response = client.get("/api/manufacturer/00:11:22:33:44:55")
+    assert response.status_code == 200
+    assert response.json() == {"manufacturer": "Unknown"}
+
 def test_update_new_device(client):
     """Test updating non-existent device."""
     mac = "00:11:22:33:44:55"

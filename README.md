@@ -95,6 +95,16 @@ Get specific device by MAC address.
 **Error Response:**
 - Status Code: 404 (Device not found)
 
+### GET /api/manufacturer/{mac}
+Get manufacturer information for a MAC address.
+
+**Response:**
+```json
+{
+  "manufacturer": "Apple, Inc."
+}
+```
+
 ### PUT /api/devices/{mac}
 Update device name or notification settings.
 
@@ -132,8 +142,9 @@ The application includes a web interface for viewing tracked devices:
 
 The web interface displays:
 - MAC addresses of all tracked devices
-- Device names (or "Unknown" if not set)
-- Notification status (color-coded: green for enabled, red for disabled)
+- Device manufacturers (looked up via MAC address)
+- Device names (or "Unknown" if not set) - editable inline
+- Notification status - toggle with checkbox
 - First and last seen timestamps
 - Auto-refreshes every 30 seconds
 
