@@ -157,6 +157,18 @@ def test_get_device_not_found(mock_db, client):
     assert response.status_code == 404
     assert response.json() == {"detail": "Device not found"}
 
+def test_root_redirect(client):
+    """Test root endpoint redirects to devices page."""
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/devices.html"
+
+def test_devices_html_page(client):
+    """Test devices HTML page endpoint."""
+    response = client.get("/devices.html")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
 def test_update_new_device(client):
     """Test updating non-existent device."""
     mac = "00:11:22:33:44:55"
