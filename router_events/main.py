@@ -1,14 +1,33 @@
 """Main FastAPI application for RouterOS event processing."""
 
 import json
+from contextlib import asynccontextmanager
+from typing import Optional
 import uvicorn
 from fastapi import FastAPI, Request, Response
+from pydantic import BaseModel
+from .database import db
+from .notifications import notifier
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Application lifespan handler."""
+    # Startup
+    await db.connect()
+    yield
+    # Shutdown (if needed)
 
 app = FastAPI(
     title="RouterOS Event Receiver",
     description="Receives and processes events from RouterOS devices",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
+
+class DeviceUpdate(BaseModel):
+    """Device update model for API requests."""
+    name: Optional[str] = None
+    notify: Optional[bool] = None
 
 @app.post("/api/events")
 async def receive_event(request: Request):
@@ -18,16 +37,29 @@ async def receive_event(request: Request):
 
         if content_type.startswith("application/json"):
             data = await request.json()
-            host = data.get('host', '').strip()
+            host = (data.get('host') or '').strip()
             mac = data.get('mac', '')
             ip = data.get('ip', '')
-            interface = data.get('interface', '')
             action = data.get('action', '')
 
-            if host:
-                print(f"DHCP {action}: {mac} ({host}) -> {ip} on {interface}")
-            else:
-                print(f"DHCP {action}: {mac} -> {ip} on {interface}")
+            if action == 'assigned' and mac:
+                device = await db.get_device(mac)
+
+                if not device:
+                    # Unknown device
+                    await db.add_device(mac, host or None)
+                    await notifier.notify_unknown_device(mac, ip, host)
+                    print(f"Unknown device: {mac} ({host or 'no hostname'}) -> {ip}")
+                else:
+                    # Update last seen
+                    await db.add_device(mac, host or device.get('name'))
+
+                    if device.get('notify'):
+                        device_name = device.get('name') or host or 'Unknown'
+                        await notifier.notify_tracked_device(device_name, mac, ip)
+
+                    device_display = device.get('name') or host or 'no name'
+                    print(f"Known device: {mac} ({device_display}) -> {ip}")
         else:
             body = await request.body()
             print(f"Non-JSON event: {body.decode('utf-8')[:100]}")
@@ -35,7 +67,21 @@ async def receive_event(request: Request):
         return Response(status_code=204)
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
         print(f"Error processing request: {exc}")
-        return Response(status_code=204)  # Still return success to RouterOS
+        return Response(status_code=204)
+
+@app.put("/api/devices/{mac}")
+async def update_device(mac: str, update: DeviceUpdate):
+    """Update device name or notification settings."""
+    device = await db.get_device(mac)
+    if not device:
+        await db.add_device(mac, update.name, update.notify or False)
+    else:
+        if update.name is not None:
+            await db.update_device_name(mac, update.name)
+        if update.notify is not None:
+            await db.set_device_notify(mac, update.notify)
+
+    return {"status": "updated"}
 
 @app.get("/health")
 async def health_check():
@@ -43,5 +89,4 @@ async def health_check():
     return {"status": "healthy"}
 
 if __name__ == "__main__":
-    # Run the server on all interfaces (0.0.0.0) port 13959
     uvicorn.run(app, host="0.0.0.0", port=13959)
