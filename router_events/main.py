@@ -5,7 +5,6 @@ from contextlib import asynccontextmanager
 from typing import Optional
 import uvicorn
 from fastapi import FastAPI, Request, Response, HTTPException
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 from pydantic import BaseModel
 from .database import db
@@ -25,9 +24,6 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
-
-# Mount static files
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 class DeviceUpdate(BaseModel):
     """Device update model for API requests."""
