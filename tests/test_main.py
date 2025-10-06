@@ -172,6 +172,9 @@ def test_devices_html_page(client):
 @patch('router_events.main.httpx.AsyncClient')
 def test_get_manufacturer_success(mock_client, client):
     """Test successful manufacturer lookup."""
+    from router_events.main import manufacturer_cache
+    manufacturer_cache.cache.clear()
+    
     mock_response = AsyncMock()
     mock_response.status_code = 200
     mock_response.text = "Apple, Inc."
@@ -185,12 +188,24 @@ def test_get_manufacturer_success(mock_client, client):
 @patch('router_events.main.httpx.AsyncClient')
 def test_get_manufacturer_unknown(mock_client, client):
     """Test manufacturer lookup failure."""
+    from router_events.main import manufacturer_cache
+    manufacturer_cache.cache.clear()
+    
     import httpx
     mock_client.return_value.__aenter__.return_value.get = AsyncMock(side_effect=httpx.RequestError("API error"))
     
     response = client.get("/api/manufacturer/00:11:22:33:44:55")
     assert response.status_code == 200
     assert response.json() == {"manufacturer": "Unknown"}
+
+def test_get_manufacturer_cached(client):
+    """Test cached manufacturer lookup."""
+    from router_events.main import manufacturer_cache
+    manufacturer_cache.cache["00:11:22:33:44:55"] = "Cached Manufacturer"
+    
+    response = client.get("/api/manufacturer/00:11:22:33:44:55")
+    assert response.status_code == 200
+    assert response.json() == {"manufacturer": "Cached Manufacturer"}
 
 def test_update_new_device(client):
     """Test updating non-existent device."""
