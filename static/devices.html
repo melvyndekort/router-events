@@ -10,6 +10,10 @@
         .notify-yes { color: green; }
         .notify-no { color: red; }
         #loading { text-align: center; margin: 20px; }
+        .editable { cursor: pointer; }
+        .editable:hover { background-color: #f0f0f0; }
+        input[type="text"] { width: 100%; border: none; background: transparent; }
+        input[type="checkbox"] { cursor: pointer; }
     </style>
 </head>
 <body>
@@ -30,6 +34,26 @@
     </table>
 
     <script>
+        async function updateDevice(mac, field, value) {
+            try {
+                const data = {};
+                data[field] = value;
+                
+                const response = await fetch(`/api/devices/${mac}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Update failed');
+                }
+            } catch (error) {
+                alert('Error updating device: ' + error.message);
+                loadDevices(); // Reload to revert changes
+            }
+        }
+
         async function loadDevices() {
             try {
                 const response = await fetch('/api/devices');
@@ -41,11 +65,30 @@
                 data.devices.forEach(device => {
                     const row = tbody.insertRow();
                     row.insertCell(0).textContent = device.mac;
-                    row.insertCell(1).textContent = device.name || 'Unknown';
                     
+                    // Editable name field
+                    const nameCell = row.insertCell(1);
+                    const nameInput = document.createElement('input');
+                    nameInput.type = 'text';
+                    nameInput.value = device.name || '';
+                    nameInput.placeholder = 'Unknown';
+                    nameInput.addEventListener('blur', () => {
+                        updateDevice(device.mac, 'name', nameInput.value || null);
+                    });
+                    nameInput.addEventListener('keypress', (e) => {
+                        if (e.key === 'Enter') nameInput.blur();
+                    });
+                    nameCell.appendChild(nameInput);
+                    
+                    // Editable notify checkbox
                     const notifyCell = row.insertCell(2);
-                    notifyCell.textContent = device.notify ? 'Yes' : 'No';
-                    notifyCell.className = device.notify ? 'notify-yes' : 'notify-no';
+                    const notifyCheckbox = document.createElement('input');
+                    notifyCheckbox.type = 'checkbox';
+                    notifyCheckbox.checked = device.notify;
+                    notifyCheckbox.addEventListener('change', () => {
+                        updateDevice(device.mac, 'notify', notifyCheckbox.checked);
+                    });
+                    notifyCell.appendChild(notifyCheckbox);
                     
                     row.insertCell(3).textContent = new Date(device.first_seen).toLocaleString();
                     row.insertCell(4).textContent = new Date(device.last_seen).toLocaleString();
