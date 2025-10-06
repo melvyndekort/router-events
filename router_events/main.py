@@ -4,14 +4,14 @@ import json
 import asyncio
 import time
 from contextlib import asynccontextmanager
-from typing import Optional, Set
+from typing import Set
 import uvicorn
 import httpx
 from fastapi import FastAPI, Request, Response, HTTPException, BackgroundTasks
 from fastapi.responses import RedirectResponse, FileResponse
-from pydantic import BaseModel
 from .database import db
 from .notifications import notifier
+from .schemas import DeviceUpdateRequest, UpdateResponse
 
 class RateLimiter:
     """Rate limiter for API requests."""
@@ -96,11 +96,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-class DeviceUpdate(BaseModel):
-    """Device update model for API requests."""
-    name: Optional[str] = None
-    notify: Optional[bool] = None
-
 @app.get("/")
 async def root():
     """Redirect to devices page."""
@@ -154,8 +149,17 @@ async def receive_event(request: Request):
 @app.get("/api/devices")
 async def get_devices():
     """Get all devices."""
-    devices = await db.get_all_devices()
-    return {"devices": devices}
+    devices = await db.get_devices()
+    return {"devices": [
+        {
+            "mac": device.mac,
+            "name": device.name,
+            "notify": device.notify,
+            "first_seen": device.first_seen,
+            "last_seen": device.last_seen
+        }
+        for device in devices
+    ]}
 
 @app.get("/api/devices/{mac}")
 async def get_device(mac: str):
@@ -163,21 +167,27 @@ async def get_device(mac: str):
     device = await db.get_device(mac)
     if not device:
         raise HTTPException(status_code=404, detail="Device not found")
-    return device
+    return {
+        "mac": device.mac,
+        "name": device.name,
+        "notify": device.notify,
+        "first_seen": device.first_seen,
+        "last_seen": device.last_seen
+    }
 
 @app.put("/api/devices/{mac}")
-async def update_device(mac: str, update: DeviceUpdate):
+async def update_device(mac: str, update: DeviceUpdateRequest):
     """Update device name or notification settings."""
     device = await db.get_device(mac)
     if not device:
-        await db.add_device(mac, update.name, update.notify or False)
-    else:
-        if update.name is not None:
-            await db.update_device_name(mac, update.name)
-        if update.notify is not None:
-            await db.set_device_notify(mac, update.notify)
+        await db.add_device(mac, "", update.name)
+    
+    if update.name is not None:
+        await db.set_device_name(mac, update.name)
+    if update.notify is not None:
+        await db.set_device_notify(mac, update.notify)
 
-    return {"status": "updated"}
+    return UpdateResponse(status="updated")
 
 @app.get("/api/manufacturer/{mac}")
 async def get_manufacturer(mac: str, background_tasks: BackgroundTasks):

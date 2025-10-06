@@ -6,7 +6,8 @@ A FastAPI-based service for receiving and processing events from RouterOS device
 
 - FastAPI web framework for high performance
 - Event receiving endpoint for RouterOS webhooks
-- MariaDB integration for device tracking
+- MariaDB integration for device tracking with SQLAlchemy ORM
+- Alembic database migrations for schema management
 - ntfy notifications for unknown and tracked devices
 - Device management API for manual naming
 - Health check endpoint for monitoring
@@ -215,6 +216,23 @@ make pylint
 poetry run black router_events tests
 poetry run isort router_events tests
 ```
+
+## Database Migrations
+
+The application uses Alembic for database schema management:
+
+```bash
+# Create a new migration
+poetry run alembic revision --autogenerate -m "Description"
+
+# Apply migrations
+poetry run alembic upgrade head
+
+# Check current migration status
+poetry run alembic current
+```
+
+Migrations run automatically when the application starts.
 
 ## Configuration
 

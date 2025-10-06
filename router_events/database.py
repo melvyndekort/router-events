@@ -1,158 +1,163 @@
-"""Database operations for device tracking."""
+"""Database operations for device tracking using SQLAlchemy."""
 
 import os
 import datetime
-from typing import Optional, Dict, Any
-import aiomysql
+from typing import Optional, List
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import select, update, insert
+from alembic.config import Config
+from alembic import command
+from .models import Device, ManufacturerStatus
 
 class Database:
     """Database connection and operations for device tracking."""
 
     def __init__(self):
-        self.pool = None
+        self.engine = None
+        self.async_session = None
 
     async def connect(self):
-        """Initialize database connection pool."""
-        self.pool = await aiomysql.create_pool(
-            host=os.getenv('DB_HOST', 'localhost'),
-            port=int(os.getenv('DB_PORT', '3306')),
-            user=os.getenv('DB_USER', 'router_events'),
-            password=os.getenv('DB_PASSWORD', ''),
-            db=os.getenv('DB_NAME', 'router_events'),
-            autocommit=True
+        """Connect to the database."""
+        db_url = (f"mysql+aiomysql://{os.getenv('DB_USER', 'router_events')}:"
+                 f"{os.getenv('DB_PASSWORD', '')}@{os.getenv('DB_HOST', 'localhost')}:"
+                 f"{os.getenv('DB_PORT', '3306')}/{os.getenv('DB_NAME', 'router_events')}")
+
+        self.engine = create_async_engine(db_url, echo=False)
+        self.async_session = sessionmaker(
+            self.engine, class_=AsyncSession, expire_on_commit=False
         )
-        await self._create_tables()
 
-    async def _create_tables(self):
-        """Create required tables if they don't exist."""
-        async with self.pool.acquire() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS devices (
-                        mac VARCHAR(17) PRIMARY KEY,
-                        name VARCHAR(255),
-                        notify BOOLEAN DEFAULT FALSE,
-                        manufacturer VARCHAR(255),
-                        manufacturer_status ENUM('pending', 'found', 'unknown', 'error') DEFAULT 'pending',
-                        manufacturer_last_attempt TIMESTAMP NULL,
-                        first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-                    )
-                """)
-                await cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS events (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        mac VARCHAR(17),
-                        ip VARCHAR(45),
-                        host VARCHAR(255),
-                        action VARCHAR(50),
-                        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        INDEX idx_mac (mac),
-                        INDEX idx_timestamp (timestamp)
-                    )
-                """)
+        # Run migrations
+        await self._run_migrations()
 
-    async def get_device(self, mac: str) -> Optional[Dict[str, Any]]:
-        """Get device by MAC address."""
-        async with self.pool.acquire() as conn:
-            async with conn.cursor(aiomysql.DictCursor) as cursor:
-                await cursor.execute("SELECT * FROM devices WHERE mac = %s", (mac,))
-                return await cursor.fetchone()
+    async def _run_migrations(self):
+        """Run Alembic migrations."""
+        try:
+            alembic_cfg = Config("alembic.ini")
+            command.upgrade(alembic_cfg, "head")
+        except Exception as e:
+            print(f"Migration warning: {e}")
 
-    async def get_all_devices(self) -> list:
-        """Get all devices."""
-        async with self.pool.acquire() as conn:
-            async with conn.cursor(aiomysql.DictCursor) as cursor:
-                await cursor.execute("SELECT * FROM devices ORDER BY last_seen DESC")
-                return await cursor.fetchall()
+    async def add_device(self, mac: str, ip: str = "", host: Optional[str] = None):
+        """Add or update a device."""
+        async with self.async_session() as session:
+            # Check if device exists
+            result = await session.execute(select(Device).where(Device.mac == mac))
+            device = result.scalar_one_or_none()
 
-    async def add_device(self, mac: str, name: str = None, notify: bool = False):
-        """Add or update device."""
-        async with self.pool.acquire() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute("""
-                    INSERT INTO devices (mac, name, notify)
-                    VALUES (%s, %s, %s)
-                    ON DUPLICATE KEY UPDATE
-                    name = COALESCE(VALUES(name), name),
-                    notify = VALUES(notify),
-                    last_seen = CURRENT_TIMESTAMP
-                """, (mac, name, notify))
-
-    async def update_device_name(self, mac: str, name: str):
-        """Update device name."""
-        async with self.pool.acquire() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute(
-                    "UPDATE devices SET name = %s WHERE mac = %s",
-                    (name, mac)
+            if device:
+                # Update last_seen
+                device.last_seen = datetime.datetime.now()
+                if host:
+                    device.name = host
+            else:
+                # Create new device
+                device = Device(
+                    mac=mac,
+                    name=host,
+                    notify=False,
+                    first_seen=datetime.datetime.now(),
+                    last_seen=datetime.datetime.now()
                 )
+                session.add(device)
+
+            await session.commit()
+            return device
+
+    async def get_devices(self) -> List[Device]:
+        """Get all devices."""
+        async with self.async_session() as session:
+            result = await session.execute(select(Device))
+            return result.scalars().all()
+
+    async def get_device(self, mac: str) -> Optional[Device]:
+        """Get a specific device."""
+        async with self.async_session() as session:
+            result = await session.execute(select(Device).where(Device.mac == mac))
+            return result.scalar_one_or_none()
+
+    async def set_device_name(self, mac: str, name: Optional[str]):
+        """Set device name."""
+        async with self.async_session() as session:
+            await session.execute(
+                update(Device).where(Device.mac == mac).values(name=name)
+            )
+            await session.commit()
 
     async def set_device_notify(self, mac: str, notify: bool):
         """Set device notification flag."""
-        async with self.pool.acquire() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute(
-                    "UPDATE devices SET notify = %s WHERE mac = %s",
-                    (notify, mac)
-                )
+        async with self.async_session() as session:
+            await session.execute(
+                update(Device).where(Device.mac == mac).values(notify=notify)
+            )
+            await session.commit()
 
     async def get_manufacturer(self, mac: str) -> Optional[str]:
         """Get manufacturer for a device."""
-        async with self.pool.acquire() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute("""
-                    SELECT manufacturer, manufacturer_status, manufacturer_last_attempt
-                    FROM devices WHERE mac = %s
-                """, (mac,))
-                result = await cursor.fetchone()
-                if not result:
-                    return None
+        async with self.async_session() as session:
+            result = await session.execute(
+                select(Device.manufacturer, Device.manufacturer_status)
+                .where(Device.mac == mac)
+            )
+            row = result.first()
+            if not row:
+                return None
 
-                # Return manufacturer if found
-                if result['manufacturer_status'] == 'found':
-                    return result['manufacturer']
-                if result['manufacturer_status'] == 'unknown':
-                    return 'Unknown'
+            manufacturer, status = row
+            if status == ManufacturerStatus.FOUND:
+                return manufacturer
+            if status == ManufacturerStatus.UNKNOWN:
+                return 'Unknown'
 
-                return None  # Still pending or needs retry
+            return None
 
     async def needs_manufacturer_lookup(self, mac: str) -> bool:
         """Check if MAC needs manufacturer lookup (new or retry needed)."""
-        async with self.pool.acquire() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute("""
-                    SELECT manufacturer_status, manufacturer_last_attempt
-                    FROM devices WHERE mac = %s
-                """, (mac,))
-                result = await cursor.fetchone()
+        async with self.async_session() as session:
+            result = await session.execute(
+                select(Device.manufacturer_status, Device.manufacturer_last_attempt)
+                .where(Device.mac == mac)
+            )
+            row = result.first()
 
-                if not result:
-                    return True  # New device
+            if not row:
+                return True  # New device
 
-                status = result['manufacturer_status']
-                last_attempt = result['manufacturer_last_attempt']
+            status, last_attempt = row
 
-                # Retry if error status and more than 5 minutes since last attempt
-                if status == 'error' and last_attempt:
-                    now = datetime.datetime.now()
-                    if (now - last_attempt).total_seconds() > 300:  # 5 minutes
-                        return True
+            # Retry if error status and more than 5 minutes since last attempt
+            if status == ManufacturerStatus.ERROR and last_attempt:
+                now = datetime.datetime.now()
+                if (now - last_attempt).total_seconds() > 300:  # 5 minutes
+                    return True
 
-                # Needs lookup if pending or error
-                return status in ('pending', 'error')
+            # Needs lookup if pending or error
+            return status in (ManufacturerStatus.PENDING, ManufacturerStatus.ERROR)
 
-    async def set_manufacturer(self, mac: str, manufacturer: str, status: str = 'found'):
+    async def set_manufacturer(self, mac: str, manufacturer: Optional[str], status: str = 'found'):
         """Set manufacturer for a device."""
-        async with self.pool.acquire() as conn:
-            async with conn.cursor() as cursor:
-                await cursor.execute("""
-                    INSERT INTO devices (mac, manufacturer, manufacturer_status, manufacturer_last_attempt)
-                    VALUES (%s, %s, %s, NOW())
-                    ON DUPLICATE KEY UPDATE
-                        manufacturer = VALUES(manufacturer),
-                        manufacturer_status = VALUES(manufacturer_status),
-                        manufacturer_last_attempt = VALUES(manufacturer_last_attempt)
-                """, (mac, manufacturer, status))
+        status_enum = ManufacturerStatus(status)
+        async with self.async_session() as session:
+            # Upsert device with manufacturer info
+            stmt = insert(Device).values(
+                mac=mac,
+                manufacturer=manufacturer,
+                manufacturer_status=status_enum,
+                manufacturer_last_attempt=datetime.datetime.now()
+            )
+            stmt = stmt.on_duplicate_key_update(
+                manufacturer=stmt.inserted.manufacturer,
+                manufacturer_status=stmt.inserted.manufacturer_status,
+                manufacturer_last_attempt=stmt.inserted.manufacturer_last_attempt
+            )
+            await session.execute(stmt)
+            await session.commit()
 
+    async def close(self):
+        """Close database connection."""
+        if self.engine:
+            await self.engine.dispose()
+
+# Global database instance
 db = Database()
