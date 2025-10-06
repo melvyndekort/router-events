@@ -105,7 +105,7 @@ Get manufacturer information for a MAC address.
 }
 ```
 
-**Note:** Results are cached and processed asynchronously in the background to respect API rate limits. May return "Loading..." initially.
+**Note:** Results are cached and processed asynchronously in the background to respect API rate limits. May return "Loading..." initially. Failed lookups are automatically retried every 5 minutes.
 
 ### PUT /api/devices/{mac}
 Update device name or notification settings.

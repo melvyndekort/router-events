@@ -1,6 +1,7 @@
 """Database operations for device tracking."""
 
 import os
+import datetime
 from typing import Optional, Dict, Any
 import aiomysql
 
@@ -31,6 +32,9 @@ class Database:
                         mac VARCHAR(17) PRIMARY KEY,
                         name VARCHAR(255),
                         notify BOOLEAN DEFAULT FALSE,
+                        manufacturer VARCHAR(255),
+                        manufacturer_status ENUM('pending', 'found', 'unknown', 'error') DEFAULT 'pending',
+                        manufacturer_last_attempt TIMESTAMP NULL,
                         first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                     )
@@ -92,5 +96,63 @@ class Database:
                     "UPDATE devices SET notify = %s WHERE mac = %s",
                     (notify, mac)
                 )
+
+    async def get_manufacturer(self, mac: str) -> Optional[str]:
+        """Get manufacturer for a device."""
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("""
+                    SELECT manufacturer, manufacturer_status, manufacturer_last_attempt
+                    FROM devices WHERE mac = %s
+                """, (mac,))
+                result = await cursor.fetchone()
+                if not result:
+                    return None
+
+                # Return manufacturer if found
+                if result['manufacturer_status'] == 'found':
+                    return result['manufacturer']
+                if result['manufacturer_status'] == 'unknown':
+                    return 'Unknown'
+
+                return None  # Still pending or needs retry
+
+    async def needs_manufacturer_lookup(self, mac: str) -> bool:
+        """Check if MAC needs manufacturer lookup (new or retry needed)."""
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("""
+                    SELECT manufacturer_status, manufacturer_last_attempt
+                    FROM devices WHERE mac = %s
+                """, (mac,))
+                result = await cursor.fetchone()
+
+                if not result:
+                    return True  # New device
+
+                status = result['manufacturer_status']
+                last_attempt = result['manufacturer_last_attempt']
+
+                # Retry if error status and more than 5 minutes since last attempt
+                if status == 'error' and last_attempt:
+                    now = datetime.datetime.now()
+                    if (now - last_attempt).total_seconds() > 300:  # 5 minutes
+                        return True
+
+                # Needs lookup if pending or error
+                return status in ('pending', 'error')
+
+    async def set_manufacturer(self, mac: str, manufacturer: str, status: str = 'found'):
+        """Set manufacturer for a device."""
+        async with self.pool.acquire() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("""
+                    INSERT INTO devices (mac, manufacturer, manufacturer_status, manufacturer_last_attempt)
+                    VALUES (%s, %s, %s, NOW())
+                    ON DUPLICATE KEY UPDATE
+                        manufacturer = VALUES(manufacturer),
+                        manufacturer_status = VALUES(manufacturer_status),
+                        manufacturer_last_attempt = VALUES(manufacturer_last_attempt)
+                """, (mac, manufacturer, status))
 
 db = Database()

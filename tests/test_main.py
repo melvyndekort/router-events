@@ -169,29 +169,34 @@ def test_devices_html_page(client):
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
 
-def test_get_manufacturer_success(client):
-    """Test successful manufacturer lookup from cache."""
-    from router_events.main import manufacturer_cache
-    manufacturer_cache.cache["00:11:22:33:44:55"] = "Apple, Inc."
+@patch('router_events.main.db.get_manufacturer', new_callable=AsyncMock)
+@patch('router_events.main.pending_lookups', set())
+def test_get_manufacturer_success(mock_get, client):
+    """Test successful manufacturer lookup from database."""
+    mock_get.return_value = "Apple, Inc."
     
     response = client.get("/api/manufacturer/00:11:22:33:44:55")
     assert response.status_code == 200
     assert response.json() == {"manufacturer": "Apple, Inc."}
 
-def test_get_manufacturer_loading(client):
+@patch('router_events.main.db.get_manufacturer', new_callable=AsyncMock)
+@patch('router_events.main.db.needs_manufacturer_lookup', new_callable=AsyncMock)
+@patch('router_events.main.pending_lookups', set())
+@patch('router_events.main.lookup_manufacturer_background')
+def test_get_manufacturer_loading(mock_bg, mock_needs, mock_get, client):
     """Test manufacturer lookup returns loading for uncached MAC."""
-    from router_events.main import manufacturer_cache
-    manufacturer_cache.cache.clear()
-    manufacturer_cache.pending.clear()
+    mock_get.return_value = None
+    mock_needs.return_value = True
     
     response = client.get("/api/manufacturer/00:11:22:33:44:99")
     assert response.status_code == 200
     assert response.json() == {"manufacturer": "Loading..."}
 
-def test_get_manufacturer_cached(client):
+@patch('router_events.main.db.get_manufacturer', new_callable=AsyncMock)
+@patch('router_events.main.pending_lookups', set())
+def test_get_manufacturer_cached(mock_get, client):
     """Test cached manufacturer lookup."""
-    from router_events.main import manufacturer_cache
-    manufacturer_cache.cache["00:11:22:33:44:55"] = "Cached Manufacturer"
+    mock_get.return_value = "Cached Manufacturer"
     
     response = client.get("/api/manufacturer/00:11:22:33:44:55")
     assert response.status_code == 200

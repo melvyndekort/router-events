@@ -4,7 +4,7 @@ import json
 import asyncio
 import time
 from contextlib import asynccontextmanager
-from typing import Optional, Dict, Set
+from typing import Optional, Set
 import uvicorn
 import httpx
 from fastapi import FastAPI, Request, Response, HTTPException, BackgroundTasks
@@ -13,61 +13,73 @@ from pydantic import BaseModel
 from .database import db
 from .notifications import notifier
 
-class ManufacturerCache:
-    """Cache for manufacturer lookups with rate limiting."""
-
+class RateLimiter:
+    """Rate limiter for API requests."""
     def __init__(self):
-        self.cache: Dict[str, str] = {}
         self.last_request_time = 0.0
-        self.pending: Set[str] = set()
 
-    def get(self, mac: str) -> Optional[str]:
-        """Get cached manufacturer."""
-        return self.cache.get(mac)
+    def should_wait(self, min_interval: float = 0.5) -> float:
+        """Check if we should wait and return wait time."""
+        current_time = time.time()
+        elapsed = current_time - self.last_request_time
+        if elapsed < min_interval:
+            return min_interval - elapsed
+        return 0.0
 
-    def set(self, mac: str, manufacturer: str) -> None:
-        """Set cached manufacturer."""
-        self.cache[mac] = manufacturer
-        self.pending.discard(mac)
+    def mark_request(self):
+        """Mark that a request was made."""
+        self.last_request_time = time.time()
 
-    def is_pending(self, mac: str) -> bool:
-        """Check if MAC is being processed."""
-        return mac in self.pending
+rate_limiter = RateLimiter()
 
-    def add_pending(self, mac: str) -> None:
-        """Mark MAC as being processed."""
-        self.pending.add(mac)
-
-manufacturer_cache = ManufacturerCache()
+# Track pending manufacturer lookups
+pending_lookups: Set[str] = set()
 
 async def lookup_manufacturer_background(mac: str):
-    """Background task to lookup manufacturer."""
-    if manufacturer_cache.get(mac) or manufacturer_cache.is_pending(mac):
+    """Background task to lookup manufacturer with retry logic."""
+    if mac in pending_lookups:
         return
 
-    manufacturer_cache.add_pending(mac)
+    # Check if lookup is needed
+    if not await db.needs_manufacturer_lookup(mac):
+        return
 
-    # Rate limiting: wait at least 0.5 seconds between requests
-    current_time = time.time()
-    if current_time - manufacturer_cache.last_request_time < 0.5:
-        await asyncio.sleep(0.5 - (current_time - manufacturer_cache.last_request_time))
+    pending_lookups.add(mac)
 
-    async with httpx.AsyncClient() as client:
-        try:
-            manufacturer_cache.last_request_time = time.time()
-            response = await client.get(f"https://api.macvendors.com/{mac}", timeout=5.0)
-            if response.status_code == 200:
-                manufacturer = response.text.strip()
-                if manufacturer and "Not Found" not in manufacturer:
-                    manufacturer_cache.set(mac, manufacturer)
-                    print(f"Found manufacturer for {mac}: {manufacturer}")
+    try:
+        # Rate limiting: wait at least 0.5 seconds between requests
+        wait_time = rate_limiter.should_wait()
+        if wait_time > 0:
+            await asyncio.sleep(wait_time)
+
+        async with httpx.AsyncClient() as client:
+            try:
+                rate_limiter.mark_request()
+                response = await client.get(f"https://api.macvendors.com/{mac}", timeout=5.0)
+
+                if response.status_code == 200:
+                    manufacturer = response.text.strip()
+                    if manufacturer and "Not Found" not in manufacturer:
+                        await db.set_manufacturer(mac, manufacturer, 'found')
+                        print(f"Found manufacturer for {mac}: {manufacturer}")
+                        return
+                    await db.set_manufacturer(mac, 'Unknown', 'unknown')
+                    print(f"No manufacturer found for {mac}")
                     return
-            print(f"No manufacturer found for {mac}: status {response.status_code}")
-        except (httpx.RequestError, httpx.TimeoutException) as e:
-            print(f"Error looking up manufacturer for {mac}: {e}")
+                if response.status_code == 429:  # Rate limited
+                    await db.set_manufacturer(mac, None, 'error')
+                    print(f"Rate limited for {mac}, will retry later")
+                    return
+                await db.set_manufacturer(mac, None, 'error')
+                print(f"API error for {mac}: status {response.status_code}")
+                return
 
-    # Cache unknown results too
-    manufacturer_cache.set(mac, "Unknown")
+            except (httpx.RequestError, httpx.TimeoutException) as e:
+                await db.set_manufacturer(mac, None, 'error')
+                print(f"Network error looking up manufacturer for {mac}: {e}")
+
+    finally:
+        pending_lookups.discard(mac)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -170,13 +182,13 @@ async def update_device(mac: str, update: DeviceUpdate):
 @app.get("/api/manufacturer/{mac}")
 async def get_manufacturer(mac: str, background_tasks: BackgroundTasks):
     """Get manufacturer for MAC address."""
-    # Check cache first
-    cached = manufacturer_cache.get(mac)
-    if cached:
-        return {"manufacturer": cached}
+    # Check database first
+    manufacturer = await db.get_manufacturer(mac)
+    if manufacturer:
+        return {"manufacturer": manufacturer}
 
-    # If not cached and not pending, start background lookup
-    if not manufacturer_cache.is_pending(mac):
+    # If needs lookup and not already pending, start background lookup
+    if await db.needs_manufacturer_lookup(mac) and mac not in pending_lookups:
         background_tasks.add_task(lookup_manufacturer_background, mac)
 
     # Return loading status for now
