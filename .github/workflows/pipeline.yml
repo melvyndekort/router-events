@@ -6,13 +6,11 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/pipeline.yml'
       - 'router_events/**'
       - 'tests/**'
+      - 'static/**'
       - 'pyproject.toml'
-      - 'poetry.lock'
       - 'Dockerfile'
-      - 'codecov.yml'
   pull_request:
     branches:
       - main
