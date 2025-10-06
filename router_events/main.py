@@ -15,7 +15,7 @@ async def receive_event(request: Request):
     """Receive and process RouterOS events."""
     try:
         content_type = request.headers.get("content-type", "")
-        
+
         if content_type.startswith("application/json"):
             data = await request.json()
             host = data.get('host', '').strip()
@@ -23,7 +23,7 @@ async def receive_event(request: Request):
             ip = data.get('ip', '')
             interface = data.get('interface', '')
             action = data.get('action', '')
-            
+
             if host:
                 print(f"DHCP {action}: {mac} ({host}) -> {ip} on {interface}")
             else:
@@ -31,7 +31,7 @@ async def receive_event(request: Request):
         else:
             body = await request.body()
             print(f"Non-JSON event: {body.decode('utf-8')[:100]}")
-            
+
         return Response(status_code=204)
     except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
         print(f"Error processing request: {exc}")
