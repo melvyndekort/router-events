@@ -27,6 +27,23 @@ async def test_send_notification_enabled(notification_service):
         )
 
 @pytest.mark.asyncio
+async def test_send_notification_with_token(notification_service):
+    """Test sending notification with token authentication."""
+    notification_service.enabled = True
+    notification_service.token = "test-token"
+    
+    with patch('httpx.AsyncClient') as mock_client:
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock()
+        
+        await notification_service.send_notification("Test", "Message", "high")
+        
+        mock_client.return_value.__aenter__.return_value.post.assert_called_once_with(
+            f"{notification_service.ntfy_url}/{notification_service.topic}",
+            data="Message",
+            headers={"Title": "Test", "Priority": "high", "Authorization": "Bearer test-token"}
+        )
+
+@pytest.mark.asyncio
 async def test_send_notification_disabled(notification_service):
     """Test sending notification when disabled."""
     notification_service.enabled = False
