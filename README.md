@@ -60,6 +60,41 @@ Receives RouterOS events via webhook.
 **Response:**
 - Status Code: 204 (No Content)
 
+### GET /api/devices
+Get all tracked devices.
+
+**Response:**
+```json
+{
+  "devices": [
+    {
+      "mac": "00:11:22:33:44:55",
+      "name": "My Device",
+      "notify": true,
+      "first_seen": "2024-01-01T10:00:00",
+      "last_seen": "2024-01-01T12:00:00"
+    }
+  ]
+}
+```
+
+### GET /api/devices/{mac}
+Get specific device by MAC address.
+
+**Response:**
+```json
+{
+  "mac": "00:11:22:33:44:55",
+  "name": "My Device",
+  "notify": true,
+  "first_seen": "2024-01-01T10:00:00",
+  "last_seen": "2024-01-01T12:00:00"
+}
+```
+
+**Error Response:**
+- Status Code: 404 (Device not found)
+
 ### PUT /api/devices/{mac}
 Update device name or notification settings.
 
