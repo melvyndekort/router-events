@@ -180,8 +180,8 @@ async def update_device(mac: str, update: DeviceUpdateRequest):
     """Update device name or notification settings."""
     device = await db.get_device(mac)
     if not device:
-        await db.add_device(mac, "", update.name)
-    
+        await db.add_device(mac, update.name)
+
     if update.name is not None:
         await db.set_device_name(mac, update.name)
     if update.notify is not None:

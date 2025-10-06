@@ -1,9 +1,8 @@
 """Database models for device tracking."""
 
 from enum import Enum
-from sqlalchemy import Column, String, Boolean, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, String, Boolean, DateTime, Enum as SQLEnum, text
 from sqlalchemy.orm import declarative_base
-from sqlalchemy.sql import func
 
 Base = declarative_base()
 
@@ -17,6 +16,10 @@ class ManufacturerStatus(str, Enum):
     def __str__(self):
         return self.value
 
+    def is_final(self):
+        """Check if status is final (no retry needed)."""
+        return self in (self.FOUND, self.UNKNOWN)
+
 class Device(Base):
     """Device model."""
     __tablename__ = "devices"
@@ -25,7 +28,9 @@ class Device(Base):
     name = Column(String(255), nullable=True)
     notify = Column(Boolean, default=False)
     manufacturer = Column(String(255), nullable=True)
-    manufacturer_status = Column(SQLEnum(ManufacturerStatus), default=ManufacturerStatus.PENDING)
+    manufacturer_status = Column(SQLEnum(ManufacturerStatus),
+                                 default=ManufacturerStatus.PENDING)
     manufacturer_last_attempt = Column(DateTime, nullable=True)
-    first_seen = Column(DateTime, server_default=func.now())
-    last_seen = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    first_seen = Column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
+    last_seen = Column(DateTime,
+                       server_default=text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))

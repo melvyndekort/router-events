@@ -36,10 +36,10 @@ class Database:
         try:
             alembic_cfg = Config("alembic.ini")
             command.upgrade(alembic_cfg, "head")
-        except Exception as e:
+        except (FileNotFoundError, ImportError) as e:
             print(f"Migration warning: {e}")
 
-    async def add_device(self, mac: str, ip: str = "", host: Optional[str] = None):
+    async def add_device(self, mac: str, host: Optional[str] = None):
         """Add or update a device."""
         async with self.async_session() as session:
             # Check if device exists
