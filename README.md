@@ -123,6 +123,22 @@ Health check endpoint for monitoring.
 }
 ```
 
+## Web Interface
+
+The application includes a web interface for viewing tracked devices:
+
+- **GET /** - Redirects to the devices page
+- **GET /devices.html** - Web interface showing all tracked devices in a table format
+
+The web interface displays:
+- MAC addresses of all tracked devices
+- Device names (or "Unknown" if not set)
+- Notification status (color-coded: green for enabled, red for disabled)
+- First and last seen timestamps
+- Auto-refreshes every 30 seconds
+
+Access the web interface at `http://your-server:13959/` after starting the service.
+
 ## Development
 
 ### Project Structure

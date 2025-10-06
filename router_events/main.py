@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 from typing import Optional
 import uvicorn
 from fastapi import FastAPI, Request, Response, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse, FileResponse
 from pydantic import BaseModel
 from .database import db
 from .notifications import notifier
@@ -24,10 +26,23 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 class DeviceUpdate(BaseModel):
     """Device update model for API requests."""
     name: Optional[str] = None
     notify: Optional[bool] = None
+
+@app.get("/")
+async def root():
+    """Redirect to devices page."""
+    return RedirectResponse(url="/devices.html")
+
+@app.get("/devices.html")
+async def devices_page():
+    """Serve devices HTML page."""
+    return FileResponse("static/devices.html")
 
 @app.post("/api/events")
 async def receive_event(request: Request):

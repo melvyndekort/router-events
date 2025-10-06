@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Router Events - Devices</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .notify-yes { color: green; }
+        .notify-no { color: red; }
+        #loading { text-align: center; margin: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Router Events - Tracked Devices</h1>
+    <div id="loading">Loading devices...</div>
+    <table id="devicesTable" style="display: none;">
+        <thead>
+            <tr>
+                <th>MAC Address</th>
+                <th>Name</th>
+                <th>Notify</th>
+                <th>First Seen</th>
+                <th>Last Seen</th>
+            </tr>
+        </thead>
+        <tbody id="devicesBody">
+        </tbody>
+    </table>
+
+    <script>
+        async function loadDevices() {
+            try {
+                const response = await fetch('/api/devices');
+                const data = await response.json();
+                
+                const tbody = document.getElementById('devicesBody');
+                tbody.innerHTML = '';
+                
+                data.devices.forEach(device => {
+                    const row = tbody.insertRow();
+                    row.insertCell(0).textContent = device.mac;
+                    row.insertCell(1).textContent = device.name || 'Unknown';
+                    
+                    const notifyCell = row.insertCell(2);
+                    notifyCell.textContent = device.notify ? 'Yes' : 'No';
+                    notifyCell.className = device.notify ? 'notify-yes' : 'notify-no';
+                    
+                    row.insertCell(3).textContent = new Date(device.first_seen).toLocaleString();
+                    row.insertCell(4).textContent = new Date(device.last_seen).toLocaleString();
+                });
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('devicesTable').style.display = 'table';
+            } catch (error) {
+                document.getElementById('loading').textContent = 'Error loading devices: ' + error.message;
+            }
+        }
+        
+        loadDevices();
+        setInterval(loadDevices, 30000); // Refresh every 30 seconds
+    </script>
+</body>
+</html>
