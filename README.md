@@ -48,6 +48,7 @@ Receives RouterOS events via webhook.
 ```json
 {
   "type": "dhcp",
+  "action": "assigned",
   "dhcpServer": "dhcp-data",
   "interface": "data",
   "mac": "00:11:22:33:44:55",
@@ -143,7 +144,7 @@ The application can be configured through environment variables:
 To send events from RouterOS to this service, configure a webhook in your RouterOS device:
 
 ```
-/system script add name=dhcp-notify source=":local mac \$leaseActMAC; :local ip \$leaseActIP; :local dhcpServer \$leaseServerName; :local interface \"\"; :local eventType \"dhcp\"; :local host \"\"; :do {:set interface [/ip dhcp-server get [find name=\$dhcpServer] interface]} on-error={:set interface \"\"}; :do {:local leaseId [/ip dhcp-server lease find mac-address=\$mac]; :if ([:len \$leaseId] > 0) do={:set host [/ip dhcp-server lease get \$leaseId host-name]}} on-error={:set host \"\"}; /tool fetch url=\"http://your-server:13959/api/events\" http-method=post http-data=\"{\\\"type\\\":\\\"\$eventType\\\",\\\"dhcpServer\\\":\\\"\$dhcpServer\\\",\\\"interface\\\":\\\"\$interface\\\",\\\"mac\\\":\\\"\$mac\\\",\\\"ip\\\":\\\"\$ip\\\",\\\"host\\\":\\\"\$host\\\"}\" http-header-field=\"Content-Type: application/json\" keep-result=no"
+/system script add name=dhcp-notify source=":local mac \$leaseActMAC; :local ip \$leaseActIP; :local dhcpServer \$leaseServerName; :local interface \"\"; :local eventType \"dhcp\"; :local host \"\"; :local action \"unknown\"; :do {:set interface [/ip dhcp-server get [find name=\$dhcpServer] interface]} on-error={:set interface \"\"}; :do {:local leaseId [/ip dhcp-server lease find mac-address=\$mac]; :if ([:len \$leaseId] > 0) do={:set host [/ip dhcp-server lease get \$leaseId host-name]; :set action \"assigned\"} else={:set action \"released\"}} on-error={:set host \"\"; :set action \"error\"}; /tool fetch url=\"http://your-server:13959/api/events\" http-method=post http-data=\"{\\\"type\\\":\\\"\$eventType\\\",\\\"action\\\":\\\"\$action\\\",\\\"dhcpServer\\\":\\\"\$dhcpServer\\\",\\\"interface\\\":\\\"\$interface\\\",\\\"mac\\\":\\\"\$mac\\\",\\\"ip\\\":\\\"\$ip\\\",\\\"host\\\":\\\"\$host\\\"}\" http-header-field=\"Content-Type: application/json\" keep-result=no"
 ```
 
 Replace `your-server` with your actual server IP address.
