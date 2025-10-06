@@ -38,13 +38,31 @@
     <script>
         async function getManufacturer(mac) {
             try {
-                const response = await fetch(`https://api.macvendors.com/${mac}`);
+                // Try maclookup.app API first (more reliable)
+                const response = await fetch(`https://api.maclookup.app/v2/macs/${mac}`);
                 if (response.ok) {
-                    return await response.text();
+                    const data = await response.json();
+                    if (data.company) {
+                        return data.company;
+                    }
                 }
             } catch (error) {
-                // Ignore errors, return unknown
+                console.log('maclookup.app failed:', error);
             }
+            
+            try {
+                // Fallback to macvendors.com
+                const response = await fetch(`https://api.macvendors.com/${mac}`);
+                if (response.ok) {
+                    const text = await response.text();
+                    if (text && !text.includes('Not Found')) {
+                        return text;
+                    }
+                }
+            } catch (error) {
+                console.log('macvendors.com failed:', error);
+            }
+            
             return 'Unknown';
         }
 
@@ -85,10 +103,12 @@
                     manufacturerCell.textContent = 'Loading...';
                     manufacturerCell.className = 'manufacturer';
                     
-                    // Fetch manufacturer asynchronously
-                    getManufacturer(device.mac).then(manufacturer => {
-                        manufacturerCell.textContent = manufacturer;
-                    });
+                    // Fetch manufacturer asynchronously with delay to avoid rate limiting
+                    setTimeout(() => {
+                        getManufacturer(device.mac).then(manufacturer => {
+                            manufacturerCell.textContent = manufacturer;
+                        });
+                    }, Math.random() * 2000); // Random delay 0-2 seconds
                     
                     // Editable name field
                     const nameCell = row.insertCell(2);
