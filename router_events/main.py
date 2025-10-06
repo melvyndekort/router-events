@@ -4,6 +4,7 @@ import json
 from contextlib import asynccontextmanager
 from typing import Optional
 import uvicorn
+import httpx
 from fastapi import FastAPI, Request, Response, HTTPException
 from fastapi.responses import RedirectResponse, FileResponse
 from pydantic import BaseModel
@@ -107,6 +108,22 @@ async def update_device(mac: str, update: DeviceUpdate):
             await db.set_device_notify(mac, update.notify)
 
     return {"status": "updated"}
+
+@app.get("/api/manufacturer/{mac}")
+async def get_manufacturer(mac: str):
+    """Get manufacturer for MAC address."""
+    async with httpx.AsyncClient() as client:
+        try:
+            # Try macvendors.com first
+            response = await client.get(f"https://api.macvendors.com/{mac}", timeout=5.0)
+            if response.status_code == 200:
+                manufacturer = response.text.strip()
+                if manufacturer and "Not Found" not in manufacturer:
+                    return {"manufacturer": manufacturer}
+        except (httpx.RequestError, httpx.TimeoutException):
+            pass
+
+    return {"manufacturer": "Unknown"}
 
 @app.get("/health")
 async def health_check():

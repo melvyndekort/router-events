@@ -38,31 +38,14 @@
     <script>
         async function getManufacturer(mac) {
             try {
-                // Try maclookup.app API first (more reliable)
-                const response = await fetch(`https://api.maclookup.app/v2/macs/${mac}`);
+                const response = await fetch(`/api/manufacturer/${mac}`);
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.company) {
-                        return data.company;
-                    }
+                    return data.manufacturer;
                 }
             } catch (error) {
-                console.log('maclookup.app failed:', error);
+                console.log('Manufacturer lookup failed:', error);
             }
-            
-            try {
-                // Fallback to macvendors.com
-                const response = await fetch(`https://api.macvendors.com/${mac}`);
-                if (response.ok) {
-                    const text = await response.text();
-                    if (text && !text.includes('Not Found')) {
-                        return text;
-                    }
-                }
-            } catch (error) {
-                console.log('macvendors.com failed:', error);
-            }
-            
             return 'Unknown';
         }
 
@@ -103,12 +86,10 @@
                     manufacturerCell.textContent = 'Loading...';
                     manufacturerCell.className = 'manufacturer';
                     
-                    // Fetch manufacturer asynchronously with delay to avoid rate limiting
-                    setTimeout(() => {
-                        getManufacturer(device.mac).then(manufacturer => {
-                            manufacturerCell.textContent = manufacturer;
-                        });
-                    }, Math.random() * 2000); // Random delay 0-2 seconds
+                    // Fetch manufacturer asynchronously
+                    getManufacturer(device.mac).then(manufacturer => {
+                        manufacturerCell.textContent = manufacturer;
+                    });
                     
                     // Editable name field
                     const nameCell = row.insertCell(2);
