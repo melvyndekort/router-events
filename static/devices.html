@@ -19,6 +19,10 @@
 </head>
 <body>
     <h1>Router Events - Tracked Devices</h1>
+    <div style="text-align: center; margin-bottom: 20px;">
+        <button id="retryAllBtn" onclick="retryAllFailed()" style="background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">Retry All Failed Lookups</button>
+        <span id="retryStatus" style="margin-left: 10px; color: #666;"></span>
+    </div>
     <div id="loading">Loading devices...</div>
     <table id="devicesTable" style="display: none;">
         <thead>
@@ -123,6 +127,41 @@
                 document.getElementById('devicesTable').style.display = 'table';
             } catch (error) {
                 document.getElementById('loading').textContent = 'Error loading devices: ' + error.message;
+            }
+        }
+        
+        async function retryAllFailed() {
+            const btn = document.getElementById('retryAllBtn');
+            const status = document.getElementById('retryStatus');
+            
+            btn.disabled = true;
+            btn.textContent = 'Retrying...';
+            status.textContent = 'Processing...';
+            
+            try {
+                const response = await fetch('/api/manufacturer/retry', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    status.textContent = data.message;
+                    status.style.color = '#28a745';
+                    
+                    // Refresh the page after a short delay
+                    setTimeout(() => {
+                        loadDevices();
+                        status.textContent = '';
+                    }, 2000);
+                } else {
+                    throw new Error('Retry failed');
+                }
+            } catch (error) {
+                status.textContent = 'Error: ' + error.message;
+                status.style.color = '#dc3545';
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Retry All Failed Lookups';
             }
         }
         

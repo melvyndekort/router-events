@@ -22,6 +22,8 @@ COPY --from=build /venv /venv
 COPY static /static
 
 ENV PATH="/venv/bin:$PATH"
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONIOENCODING=utf-8
 
 EXPOSE 13959
 

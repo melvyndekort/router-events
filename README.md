@@ -6,7 +6,8 @@ A FastAPI-based service for receiving and processing events from RouterOS device
 
 - FastAPI web framework for high performance
 - Event receiving endpoint for RouterOS webhooks
-- MariaDB integration for device tracking
+- MariaDB integration for device tracking with SQLAlchemy ORM
+- Automatic database schema creation
 - ntfy notifications for unknown and tracked devices
 - Device management API for manual naming
 - Health check endpoint for monitoring
@@ -105,7 +106,7 @@ Get manufacturer information for a MAC address.
 }
 ```
 
-**Note:** Results are cached and processed asynchronously in the background to respect API rate limits. May return "Loading..." initially.
+**Note:** Results are cached and processed asynchronously in the background to respect API rate limits. May return "Loading..." initially. Failed lookups are automatically retried every 5 minutes.
 
 ### PUT /api/devices/{mac}
 Update device name or notification settings.
