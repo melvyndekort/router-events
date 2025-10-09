@@ -1,4 +1,4 @@
-FROM python:3-slim AS base
+FROM python:3.12-slim AS base
 
 RUN pip install --upgrade pip
 RUN pip install "poetry>=1.6,<1.7"
@@ -14,7 +14,7 @@ RUN poetry export -f requirements.txt | pip install -r /dev/stdin
 COPY . .
 RUN pip install .
 
-FROM python:3-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 LABEL org.opencontainers.image.source=https://github.com/melvyndekort/router-events
 
