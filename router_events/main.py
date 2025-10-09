@@ -188,6 +188,7 @@ async def get_devices():
             "mac": d.mac,
             "name": d.name,
             "notify": d.notify,
+            "manufacturer": d.manufacturer,
             "first_seen": d.first_seen,
             "last_seen": d.last_seen
         }
@@ -206,6 +207,7 @@ async def get_device(mac: str):
         "mac": device.mac,
         "name": device.name,
         "notify": device.notify,
+        "manufacturer": device.manufacturer,
         "first_seen": device.first_seen,
         "last_seen": device.last_seen
     }

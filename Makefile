@@ -17,7 +17,7 @@ build: test
 	@poetry build
 
 full-build: clean
-	@docker image build -t router-events .
+	@docker build -t router-events .
 
 pylint:
 	@poetry run pylint router_events
