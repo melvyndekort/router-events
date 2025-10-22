@@ -9,7 +9,7 @@ python = "^3.9"
 fastapi = "^0.119"
 uvicorn = "^0.37"
 pydantic = "^2.10"
-aiomysql = "^0.2"
+aiomysql = "^0.3"
 httpx = "^0.28"
 sqlalchemy = "^2.0"
 
