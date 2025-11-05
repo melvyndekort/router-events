@@ -1,25 +1,30 @@
-[tool.poetry]
+[project]
 name = "router-events"
 version = "0.1.0"
 description = "RouterOS event receiver and processor"
-authors = ["Melvyn de Kort <melvyn@mdekort.nl>"]
+authors = [{name = "Melvyn de Kort", email = "melvyn@mdekort.nl"}]
+requires-python = ">=3.9"
+dependencies = [
+    "fastapi>=0.119",
+    "uvicorn>=0.38",
+    "pydantic>=2.12",
+    "aiomysql>=0.3",
+    "httpx>=0.28",
+    "sqlalchemy>=2.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.9"
-fastapi = "^0.119"
-uvicorn = "^0.38"
-pydantic = "^2.12"
-aiomysql = "^0.3"
-httpx = "^0.28"
-sqlalchemy = "^2.0"
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4",
+    "pytest-cov>=7.0",
+    "pytest-asyncio>=1.2",
+    "pylint>=3.3",
+    "httpx>=0.28",
+]
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.4"
-pytest-cov = "^7.0"
-pytest-asyncio = "^1.2"
-pylint = "^3.3"
-httpx = "^0.28"
+[tool.hatch.build.targets.wheel]
+packages = ["router_events"]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"

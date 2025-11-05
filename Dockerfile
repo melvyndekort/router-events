@@ -1,18 +1,17 @@
 FROM python:3.12-slim AS base
 
-RUN pip install --upgrade pip
-RUN pip install "poetry>=1.6,<1.7"
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 RUN python -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 
 FROM base AS build
 
-COPY pyproject.toml poetry.lock ./
-RUN poetry export -f requirements.txt | pip install -r /dev/stdin
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
-COPY . .
-RUN pip install .
+COPY router_events/ ./router_events/
+RUN uv build --wheel && pip install dist/*.whl
 
 FROM python:3.12-slim AS runtime
 

@@ -5,25 +5,25 @@ clean:
 	@rm -rf .pytest_cache dist __pycache__ */__pycache__
 
 install: clean
-	@poetry install
+	@uv sync --all-extras
 
 update-deps:
-	@poetry update
+	@uv sync --upgrade --all-extras
 
 test: install
-	@poetry run pytest
+	@uv run pytest
 
 build: test
-	@poetry build
+	@uv build
 
 full-build: clean
 	@docker build -t router-events .
 
 pylint:
-	@poetry run pylint router_events
+	@uv run pylint router_events
 
 dev: install
-	@poetry run python3 -m router_events.main
+	@uv run python3 -m router_events.main
 
 run: install
-	@poetry run uvicorn router_events.main:app --host 0.0.0.0 --port 13959 --reload
+	@uv run uvicorn router_events.main:app --host 0.0.0.0 --port 13959 --reload
