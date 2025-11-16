@@ -173,12 +173,12 @@ class Database:
             await session.commit()
 
     async def retry_failed_manufacturer_lookups(self) -> int:
-        """Reset all failed and unknown manufacturer lookups for retry."""
+        """Reset all failed, unknown, and pending manufacturer lookups for retry."""
         async with self.session_factory() as session:
             result = await session.execute(
                 update(Device)
                 .where(Device.manufacturer_status.in_([
-                    ManufacturerStatus.ERROR, ManufacturerStatus.UNKNOWN
+                    ManufacturerStatus.ERROR, ManufacturerStatus.UNKNOWN, ManufacturerStatus.PENDING
                 ]))
                 .values(
                     manufacturer_status=ManufacturerStatus.PENDING,

@@ -189,6 +189,7 @@ async def get_devices():
             "name": d.name,
             "notify": d.notify,
             "manufacturer": d.manufacturer,
+            "manufacturer_status": d.manufacturer_status.value if d.manufacturer_status else "pending",
             "first_seen": d.first_seen,
             "last_seen": d.last_seen
         }
@@ -208,6 +209,7 @@ async def get_device(mac: str):
         "name": device.name,
         "notify": device.notify,
         "manufacturer": device.manufacturer,
+        "manufacturer_status": device.manufacturer_status.value if device.manufacturer_status else "pending",
         "first_seen": device.first_seen,
         "last_seen": device.last_seen
     }

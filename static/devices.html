@@ -103,7 +103,7 @@
                     row.insertCell(0).innerHTML = `<code>${device.mac}</code>`;
                     
                     const manufacturerCell = row.insertCell(1);
-                    manufacturerCell.innerHTML = `<span class="manufacturer">${device.manufacturer || 'Unknown'}</span>`;
+                    manufacturerCell.innerHTML = `<span class="manufacturer">${device.manufacturer || ''} (${device.manufacturer_status})</span>`;
                     
                     const nameCell = row.insertCell(2);
                     const nameInput = document.createElement('input');
