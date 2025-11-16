@@ -172,10 +172,20 @@ class Database:
 
             await session.commit()
 
-    async def retry_failed_manufacturer_lookups(self) -> int:
+    async def retry_failed_manufacturer_lookups(self) -> list[str]:
         """Reset all failed, unknown, and pending manufacturer lookups for retry."""
         async with self.session_factory() as session:
-            result = await session.execute(
+            # First get the MAC addresses that will be updated
+            devices_result = await session.execute(
+                select(Device.mac)
+                .where(Device.manufacturer_status.in_([
+                    ManufacturerStatus.ERROR, ManufacturerStatus.UNKNOWN, ManufacturerStatus.PENDING
+                ]))
+            )
+            mac_addresses = [row[0] for row in devices_result.fetchall()]
+            
+            # Then update them
+            await session.execute(
                 update(Device)
                 .where(Device.manufacturer_status.in_([
                     ManufacturerStatus.ERROR, ManufacturerStatus.UNKNOWN, ManufacturerStatus.PENDING
@@ -186,7 +196,7 @@ class Database:
                 )
             )
             await session.commit()
-            return result.rowcount
+            return mac_addresses
 
     async def reset_manufacturer_lookup(self, mac: str):
         """Reset manufacturer lookup for specific device."""

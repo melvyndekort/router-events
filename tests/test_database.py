@@ -337,9 +337,17 @@ class TestDatabase:
         """Test retrying failed manufacturer lookups."""
         db = Database()
         mock_session = MagicMock()
-        mock_result = MagicMock()
-        mock_result.rowcount = 5
-        mock_session.execute = AsyncMock(return_value=mock_result)
+        
+        # Mock the select query result (MAC addresses)
+        mock_select_result = MagicMock()
+        mock_select_result.fetchall.return_value = [('aa:bb:cc:dd:ee:ff',), ('11:22:33:44:55:66',)]
+        
+        # Mock the update query result
+        mock_update_result = MagicMock()
+        mock_update_result.rowcount = 2
+        
+        # Configure execute to return different results for different calls
+        mock_session.execute = AsyncMock(side_effect=[mock_select_result, mock_update_result])
         mock_session.commit = AsyncMock()
         
         db.session_factory = MagicMock()
@@ -348,8 +356,8 @@ class TestDatabase:
         
         result = await db.retry_failed_manufacturer_lookups()
         
-        assert result == 5
-        mock_session.execute.assert_called_once()
+        assert result == ['aa:bb:cc:dd:ee:ff', '11:22:33:44:55:66']
+        assert mock_session.execute.call_count == 2
         mock_session.commit.assert_called_once()
 
     @pytest.mark.asyncio

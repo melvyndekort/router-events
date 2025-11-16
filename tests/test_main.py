@@ -266,11 +266,12 @@ class TestEndpoints:
     @patch('router_events.main.db')
     def test_retry_failed_lookups(self, mock_db, client):
         """Test retrying failed manufacturer lookups."""
-        mock_db.retry_failed_manufacturer_lookups = AsyncMock(return_value=5)
+        mock_db.retry_failed_manufacturer_lookups = AsyncMock(return_value=['aa:bb:cc:dd:ee:ff', '11:22:33:44:55:66'])
+        mock_db.needs_manufacturer_lookup = AsyncMock(return_value=False)  # Prevent background task execution
         
         response = client.post("/api/manufacturer/retry")
         assert response.status_code == 200
-        assert response.json() == {"message": "Reset 5 failed lookups for retry"}
+        assert response.json() == {"message": "Reset 2 failed lookups for retry"}
 
     @patch('router_events.main.db')
     def test_retry_manufacturer_lookup_endpoint(self, mock_db, client):

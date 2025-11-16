@@ -253,10 +253,15 @@ async def get_manufacturer(mac: str, background_tasks: BackgroundTasks):
 
 
 @app.post("/api/manufacturer/retry")
-async def retry_failed_lookups():
+async def retry_failed_lookups(background_tasks: BackgroundTasks):
     """Force retry of all failed manufacturer lookups."""
-    count = await db.retry_failed_manufacturer_lookups()
-    return {"message": f"Reset {count} failed lookups for retry"}
+    mac_addresses = await db.retry_failed_manufacturer_lookups()
+    
+    # Start background tasks for all reset devices
+    for mac in mac_addresses:
+        background_tasks.add_task(lookup_manufacturer, mac)
+    
+    return {"message": f"Reset {len(mac_addresses)} failed lookups for retry"}
 
 
 @app.post("/api/manufacturer/{mac}/retry")
