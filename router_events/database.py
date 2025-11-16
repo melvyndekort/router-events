@@ -183,7 +183,7 @@ class Database:
                 ]))
             )
             mac_addresses = [row[0] for row in devices_result.fetchall()]
-            
+
             # Then update them
             await session.execute(
                 update(Device)

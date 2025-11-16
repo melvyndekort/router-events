@@ -189,7 +189,8 @@ async def get_devices():
             "name": d.name,
             "notify": d.notify,
             "manufacturer": d.manufacturer,
-            "manufacturer_status": d.manufacturer_status.value if d.manufacturer_status else "pending",
+            "manufacturer_status": (d.manufacturer_status.value 
+                                   if d.manufacturer_status else "pending"),
             "first_seen": d.first_seen,
             "last_seen": d.last_seen
         }
@@ -209,7 +210,8 @@ async def get_device(mac: str):
         "name": device.name,
         "notify": device.notify,
         "manufacturer": device.manufacturer,
-        "manufacturer_status": device.manufacturer_status.value if device.manufacturer_status else "pending",
+        "manufacturer_status": (device.manufacturer_status.value 
+                               if device.manufacturer_status else "pending"),
         "first_seen": device.first_seen,
         "last_seen": device.last_seen
     }
@@ -256,11 +258,11 @@ async def get_manufacturer(mac: str, background_tasks: BackgroundTasks):
 async def retry_failed_lookups(background_tasks: BackgroundTasks):
     """Force retry of all failed manufacturer lookups."""
     mac_addresses = await db.retry_failed_manufacturer_lookups()
-    
+
     # Start background tasks for all reset devices
     for mac in mac_addresses:
         background_tasks.add_task(lookup_manufacturer, mac)
-    
+
     return {"message": f"Reset {len(mac_addresses)} failed lookups for retry"}
 
 
