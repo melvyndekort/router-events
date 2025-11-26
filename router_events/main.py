@@ -110,22 +110,22 @@ def get_device_attr(device, attr: str, default=None):
     return device.get(attr, default) if hasattr(device, 'get') else default
 
 
-async def process_device_event(mac: str, ip: str, host: str):
+async def process_device_event(mac: str, ip: str, host: str, action: str = "assigned"):
     """Process device assignment event."""
     device = await db.get_device(mac)
 
     if not device:
         await db.add_device(mac, host or None)
-        await notifier.notify_unknown_device(mac, ip, host)
-        logger.info("New device: %s (%s) -> %s", mac, host or 'unknown', ip)
+        await notifier.notify_unknown_device(mac, ip, host, action)
+        logger.info("New device: %s (%s) -> %s [%s]", mac, host or 'unknown', ip, action)
     else:
         device_name = get_device_attr(device, 'name')
         await db.add_device(mac, host or device_name)
 
         if get_device_attr(device, 'notify', False):
             name = device_name or host or 'Unknown'
-            await notifier.notify_tracked_device(name, mac, ip)
-            logger.info("Tracked device: %s -> %s", name, ip)
+            await notifier.notify_tracked_device(name, mac, ip, action)
+            logger.info("Tracked device: %s -> %s [%s]", name, ip, action)
 
 
 @asynccontextmanager
@@ -166,11 +166,14 @@ async def receive_event(request: Request):
             return Response(status_code=204)
 
         data = await request.json()
-        if data.get('action') == 'assigned' and data.get('mac'):
+        logger.info("Received event: %s", data)
+        action = data.get('action')
+        if action and data.get('mac'):
             await process_device_event(
                 data['mac'],
                 data.get('ip', ''),
-                (data.get('host') or '').strip()
+                (data.get('host') or '').strip(),
+                action
             )
 
     except Exception as e:  # pylint: disable=broad-exception-caught

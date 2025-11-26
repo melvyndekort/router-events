@@ -39,21 +39,49 @@ class NotificationService:
         except (httpx.RequestError, httpx.HTTPStatusError) as e:
             logger.error("Notification failed '%s': %s", title, e)
 
-    async def notify_unknown_device(self, mac: str, ip: str, hostname: Optional[str] = None):
+    async def notify_unknown_device(
+        self, mac: str, ip: str, hostname: Optional[str] = None, action: str = "assigned"
+    ):
         """Notify about unknown device."""
         device_name = hostname or "Unknown device"
-        await self.send(
-            "Unknown Device Connected",
-            f"{device_name} ({mac}) connected with IP {ip}",
-            "high"
-        )
+        if action == "assigned":
+            await self.send(
+                "🟢 Unknown Device Connected",
+                f"{device_name} ({mac}) connected with IP {ip}",
+                "high"
+            )
+        elif action == "released":
+            await self.send(
+                "🔴 Unknown Device Disconnected", 
+                f"{device_name} ({mac}) disconnected",
+                "high"
+            )
+        else:
+            await self.send(
+                f"Unknown Device ({action.title()})",
+                f"{device_name} ({mac}) - {action}" + (f" with IP {ip}" if ip else ""),
+                "high"
+            )
 
-    async def notify_tracked_device(self, name: str, mac: str, ip: str):
+    async def notify_tracked_device(
+        self, name: str, mac: str, ip: str, action: str = "assigned"
+    ):
         """Notify about tracked device."""
-        await self.send(
-            "Tracked Device Connected",
-            f"{name} ({mac}) connected with IP {ip}"
-        )
+        if action == "assigned":
+            await self.send(
+                "🟢 Tracked Device Connected",
+                f"{name} ({mac}) connected with IP {ip}"
+            )
+        elif action == "released":
+            await self.send(
+                "🔴 Tracked Device Disconnected",
+                f"{name} ({mac}) disconnected"
+            )
+        else:
+            await self.send(
+                f"Tracked Device ({action.title()})",
+                f"{name} ({mac}) - {action}" + (f" with IP {ip}" if ip else "")
+            )
 
 
 notifier = NotificationService()

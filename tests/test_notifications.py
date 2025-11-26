@@ -141,7 +141,7 @@ class TestNotificationService:
             await service.notify_unknown_device("00:11:22:33:44:55", "192.168.1.100", "test-device")
             
             mock_send.assert_called_once_with(
-                "Unknown Device Connected",
+                "🟢 Unknown Device Connected",
                 "test-device (00:11:22:33:44:55) connected with IP 192.168.1.100",
                 "high"
             )
@@ -155,7 +155,7 @@ class TestNotificationService:
             await service.notify_unknown_device("00:11:22:33:44:55", "192.168.1.100")
             
             mock_send.assert_called_once_with(
-                "Unknown Device Connected",
+                "🟢 Unknown Device Connected",
                 "Unknown device (00:11:22:33:44:55) connected with IP 192.168.1.100",
                 "high"
             )
@@ -169,6 +169,60 @@ class TestNotificationService:
             await service.notify_tracked_device("My Device", "00:11:22:33:44:55", "192.168.1.100")
             
             mock_send.assert_called_once_with(
-                "Tracked Device Connected",
+                "🟢 Tracked Device Connected",
                 "My Device (00:11:22:33:44:55) connected with IP 192.168.1.100"
+            )
+
+    @pytest.mark.asyncio
+    async def test_notify_unknown_device_released(self):
+        """Test unknown device disconnection notification."""
+        service = NotificationService()
+
+        with patch.object(service, 'send', new_callable=AsyncMock) as mock_send:
+            await service.notify_unknown_device("00:11:22:33:44:55", "192.168.1.100", "test-device", "released")
+
+            mock_send.assert_called_once_with(
+                "🔴 Unknown Device Disconnected",
+                "test-device (00:11:22:33:44:55) disconnected",
+                "high"
+            )
+
+    @pytest.mark.asyncio
+    async def test_notify_tracked_device_released(self):
+        """Test tracked device disconnection notification."""
+        service = NotificationService()
+
+        with patch.object(service, 'send', new_callable=AsyncMock) as mock_send:
+            await service.notify_tracked_device("My Device", "00:11:22:33:44:55", "192.168.1.100", "released")
+
+            mock_send.assert_called_once_with(
+                "🔴 Tracked Device Disconnected",
+                "My Device (00:11:22:33:44:55) disconnected"
+            )
+
+    @pytest.mark.asyncio
+    async def test_notify_unknown_device_custom_action(self):
+        """Test unknown device with custom action."""
+        service = NotificationService()
+
+        with patch.object(service, 'send', new_callable=AsyncMock) as mock_send:
+            await service.notify_unknown_device("00:11:22:33:44:55", "192.168.1.100", "test-device", "renewed")
+
+            mock_send.assert_called_once_with(
+                "Unknown Device (Renewed)",
+                "test-device (00:11:22:33:44:55) - renewed with IP 192.168.1.100",
+                "high"
+            )
+
+    @pytest.mark.asyncio
+    async def test_notify_tracked_device_custom_action(self):
+        """Test tracked device with custom action."""
+        service = NotificationService()
+
+        with patch.object(service, 'send', new_callable=AsyncMock) as mock_send:
+            await service.notify_tracked_device("My Device", "00:11:22:33:44:55", "192.168.1.100", "renewed")
+
+            mock_send.assert_called_once_with(
+                "Tracked Device (Renewed)",
+                "My Device (00:11:22:33:44:55) - renewed with IP 192.168.1.100"
             )

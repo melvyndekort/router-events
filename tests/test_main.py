@@ -301,7 +301,7 @@ class TestProcessDeviceEvent:
         
         mock_db.add_device.assert_called_once_with("00:11:22:33:44:55", "test-host")
         mock_notifier.notify_unknown_device.assert_called_once_with(
-            "00:11:22:33:44:55", "192.168.1.100", "test-host"
+            "00:11:22:33:44:55", "192.168.1.100", "test-host", "assigned"
         )
 
     @patch('router_events.main.db')
@@ -317,7 +317,7 @@ class TestProcessDeviceEvent:
         
         mock_db.add_device.assert_called_once_with("00:11:22:33:44:55", "test-host")
         mock_notifier.notify_tracked_device.assert_called_once_with(
-            "Test Device", "00:11:22:33:44:55", "192.168.1.100"
+            "Test Device", "00:11:22:33:44:55", "192.168.1.100", "assigned"
         )
 
     @patch('router_events.main.db')
