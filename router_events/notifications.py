@@ -46,13 +46,13 @@ class NotificationService:
         device_name = hostname or "Unknown device"
         if action == "assigned":
             await self.send(
-                "🟢 Unknown Device Connected",
+                "Unknown Device Connected",
                 f"{device_name} ({mac}) connected with IP {ip}",
                 "high"
             )
         elif action == "released":
             await self.send(
-                "🔴 Unknown Device Disconnected", 
+                "Unknown Device Disconnected",
                 f"{device_name} ({mac}) disconnected",
                 "high"
             )
@@ -69,12 +69,12 @@ class NotificationService:
         """Notify about tracked device."""
         if action == "assigned":
             await self.send(
-                "🟢 Tracked Device Connected",
+                "Tracked Device Connected",
                 f"{name} ({mac}) connected with IP {ip}"
             )
         elif action == "released":
             await self.send(
-                "🔴 Tracked Device Disconnected",
+                "Tracked Device Disconnected",
                 f"{name} ({mac}) disconnected"
             )
         else:

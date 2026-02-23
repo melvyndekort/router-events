@@ -141,7 +141,7 @@ class TestNotificationService:
             await service.notify_unknown_device("00:11:22:33:44:55", "192.168.1.100", "test-device")
             
             mock_send.assert_called_once_with(
-                "🟢 Unknown Device Connected",
+                "Unknown Device Connected",
                 "test-device (00:11:22:33:44:55) connected with IP 192.168.1.100",
                 "high"
             )
@@ -155,7 +155,7 @@ class TestNotificationService:
             await service.notify_unknown_device("00:11:22:33:44:55", "192.168.1.100")
             
             mock_send.assert_called_once_with(
-                "🟢 Unknown Device Connected",
+                "Unknown Device Connected",
                 "Unknown device (00:11:22:33:44:55) connected with IP 192.168.1.100",
                 "high"
             )
@@ -169,7 +169,7 @@ class TestNotificationService:
             await service.notify_tracked_device("My Device", "00:11:22:33:44:55", "192.168.1.100")
             
             mock_send.assert_called_once_with(
-                "🟢 Tracked Device Connected",
+                "Tracked Device Connected",
                 "My Device (00:11:22:33:44:55) connected with IP 192.168.1.100"
             )
 
@@ -182,7 +182,7 @@ class TestNotificationService:
             await service.notify_unknown_device("00:11:22:33:44:55", "192.168.1.100", "test-device", "released")
 
             mock_send.assert_called_once_with(
-                "🔴 Unknown Device Disconnected",
+                "Unknown Device Disconnected",
                 "test-device (00:11:22:33:44:55) disconnected",
                 "high"
             )
@@ -196,7 +196,7 @@ class TestNotificationService:
             await service.notify_tracked_device("My Device", "00:11:22:33:44:55", "192.168.1.100", "released")
 
             mock_send.assert_called_once_with(
-                "🔴 Tracked Device Disconnected",
+                "Tracked Device Disconnected",
                 "My Device (00:11:22:33:44:55) disconnected"
             )
 
