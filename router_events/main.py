@@ -168,33 +168,43 @@ async def receive_event(request: Request):
 
         data = await request.json()
 
-        # Parse syslog message if present
-        if 'message' in data and 'action' not in data:
-            pattern = (r'^([^ ]+) (assigned|deassigned) ([0-9.]+) '
-                      r'(?:for|from) ([0-9A-F:]+)(?: (.+))?$')
-            match = re.match(pattern, data.get('message', ''))
-            if match:
-                data = {
-                    'action': match.group(2),
-                    'ip': match.group(3),
-                    'mac': match.group(4),
-                    'host': match.group(5) or ''
-                }
-
-        logger.info("Received event: %s", data)
-        action = data.get('action')
-        if action and data.get('mac'):
-            await process_device_event(
-                data['mac'],
-                data.get('ip', ''),
-                (data.get('host') or '').strip(),
-                action
-            )
+        # Handle array of events from Vector
+        if isinstance(data, list):
+            for event in data:
+                await _process_single_event(event)
+        else:
+            await _process_single_event(data)
 
     except Exception as e:  # pylint: disable=broad-exception-caught
         logger.error("Event processing error: %s", e)
 
     return Response(status_code=204)
+
+
+async def _process_single_event(data: dict):
+    """Process a single event."""
+    # Parse syslog message if present
+    if 'message' in data and 'action' not in data:
+        pattern = (r'^([^ ]+) (assigned|deassigned) ([0-9.]+) '
+                  r'(?:for|from) ([0-9A-F:]+)(?: (.+))?$')
+        match = re.match(pattern, data.get('message', ''))
+        if match:
+            data = {
+                'action': match.group(2),
+                'ip': match.group(3),
+                'mac': match.group(4),
+                'host': match.group(5) or ''
+            }
+
+    logger.info("Received event: %s", data)
+    action = data.get('action')
+    if action and data.get('mac'):
+        await process_device_event(
+            data['mac'],
+            data.get('ip', ''),
+            (data.get('host') or '').strip(),
+            action
+        )
 
 
 @app.get("/api/devices")
