@@ -1,0 +1,20 @@
+# Vector Configuration for RouterOS Event Processing
+# This configuration receives syslog messages from RouterOS, filters DHCP events,
+# and forwards them to the router-events service.
+
+[sources.syslog]
+type = "syslog"
+address = "0.0.0.0:514"
+mode = "udp"
+
+[transforms.dhcp_filter]
+type = "filter"
+inputs = ["syslog"]
+condition = 'contains!(.appname, "dhcp")'
+
+[sinks.router_events]
+type = "http"
+inputs = ["dhcp_filter"]
+uri = "http://<router-events-server>:13959/api/events"
+encoding.codec = "json"
+method = "post"

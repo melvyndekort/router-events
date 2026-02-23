@@ -162,6 +162,42 @@ class TestEndpoints:
         response = client.post("/api/events", json=event)
         assert response.status_code == 204
 
+    @patch('router_events.main.process_device_event')
+    def test_receive_event_syslog_format(self, mock_process, client):
+        """Test receiving syslog format event."""
+        mock_process.return_value = AsyncMock()
+        
+        event = {
+            "message": "dhcp-data assigned 10.204.10.99 for AA:BB:CC:DD:EE:FF test-device"
+        }
+        
+        response = client.post("/api/events", json=event)
+        assert response.status_code == 204
+        mock_process.assert_called_once()
+        call_args = mock_process.call_args[0]
+        assert call_args[0] == "AA:BB:CC:DD:EE:FF"
+        assert call_args[1] == "10.204.10.99"
+        assert call_args[2] == "test-device"
+        assert call_args[3] == "assigned"
+
+    @patch('router_events.main.process_device_event')
+    def test_receive_event_syslog_format_no_hostname(self, mock_process, client):
+        """Test receiving syslog format event without hostname."""
+        mock_process.return_value = AsyncMock()
+        
+        event = {
+            "message": "dhcp-data assigned 10.204.10.99 for AA:BB:CC:DD:EE:FF"
+        }
+        
+        response = client.post("/api/events", json=event)
+        assert response.status_code == 204
+        mock_process.assert_called_once()
+        call_args = mock_process.call_args[0]
+        assert call_args[0] == "AA:BB:CC:DD:EE:FF"
+        assert call_args[1] == "10.204.10.99"
+        assert call_args[2] == ""
+        assert call_args[3] == "assigned"
+
     def test_receive_event_non_json(self, client):
         """Test receiving non-JSON event."""
         response = client.post("/api/events", content="not json", headers={"content-type": "text/plain"})

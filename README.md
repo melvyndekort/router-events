@@ -1,11 +1,19 @@
 # RouterOS Event Receiver
 
-A FastAPI-based service for receiving and processing events from RouterOS devices.
+A FastAPI-based service for receiving and processing DHCP events from RouterOS devices via syslog and Vector.
+
+## Architecture
+
+Events flow through the following pipeline:
+1. **RouterOS** - Sends DHCP events to syslog
+2. **Vector** - Receives syslog messages, filters DHCP events, and forwards to router-events
+3. **router-events** - Processes events, tracks devices, and sends notifications
 
 ## Features
 
 - FastAPI web framework for high performance
-- Event receiving endpoint for RouterOS webhooks
+- Event receiving endpoint for Vector HTTP sink
+- Syslog message parsing for DHCP events
 - MariaDB/MySQL integration for device tracking with SQLAlchemy ORM
 - Automatic database schema creation
 - ntfy notifications for unknown and tracked devices
@@ -48,9 +56,16 @@ docker run -p 13959:13959 router-events
 ## API Endpoints
 
 ### POST /api/events
-Receives RouterOS events via webhook.
+Receives RouterOS events from Vector.
 
-**Request Body:**
+**Request Body (from Vector):**
+```json
+{
+  "message": "dhcp-server assigned 192.168.1.100 for 00:11:22:33:44:55 test-device"
+}
+```
+
+Or direct format (legacy):
 ```json
 {
   "action": "assigned",
@@ -300,16 +315,60 @@ Copy `.env.example` to `.env` and configure your settings.
 
 ## RouterOS Configuration
 
-To send events from RouterOS to this service, configure a webhook in your RouterOS device:
+To send DHCP events from RouterOS to this service, configure syslog on your RouterOS device to send messages to your Vector instance.
+
+### RouterOS 7.x Syslog Configuration
 
 ```
-/system script add name=dhcp-notify source=":local mac \$leaseActMAC; :local ip \$leaseActIP; :local dhcpServer \$leaseServerName; :local interface \"\"; :local eventType \"dhcp\"; :local host \"\"; :local action \"unknown\"; :do {:set interface [/ip dhcp-server get [find name=\$dhcpServer] interface]} on-error={:set interface \"\"}; :do {:local leaseId [/ip dhcp-server lease find mac-address=\$mac]; :if ([:len \$leaseId] > 0) do={:set host [/ip dhcp-server lease get \$leaseId host-name]; :set action \"assigned\"} else={:set action \"released\"}} on-error={:set host \"\"; :set action \"error\"}; /tool fetch url=\"http://your-server:13959/api/events\" http-method=post http-data=\"{\\\"action\\\":\\\"\$action\\\",\\\"mac\\\":\\\"\$mac\\\",\\\"ip\\\":\\\"\$ip\\\",\\\"host\\\":\\\"\$host\\\"}\" http-header-field=\"Content-Type: application/json\" keep-result=no"
+# Configure syslog action to send to Vector
+/system logging action
+add name=remote remote=<vector-server-ip> remote-port=514 target=remote
 
-# To trigger this script on DHCP lease events:
-/ip dhcp-server set [find name="your-dhcp-server"] lease-script=dhcp-notify
+# Enable DHCP server logging
+/system logging
+add action=remote topics=dhcp
 ```
 
-Replace `your-server` with your actual server IP address and `your-dhcp-server` with your DHCP server name.
+Replace `<vector-server-ip>` with the IP address of your Vector server.
+
+### Vector Configuration
+
+Vector receives syslog messages, filters DHCP events, and forwards them to router-events:
+
+```toml
+[sources.syslog]
+type = "syslog"
+address = "0.0.0.0:514"
+mode = "udp"
+
+[transforms.dhcp_filter]
+type = "filter"
+inputs = ["syslog"]
+condition = 'contains!(.appname, "dhcp")'
+
+[sinks.router_events]
+type = "http"
+inputs = ["dhcp_filter"]
+uri = "http://<router-events-server>:13959/api/events"
+encoding.codec = "json"
+method = "post"
+```
+
+Replace `<router-events-server>` with your router-events server IP address.
+
+### Message Format
+
+RouterOS sends DHCP events in the following syslog format:
+```
+dhcp-server assigned 192.168.1.100 for 00:11:22:33:44:55 hostname
+dhcp-server deassigned 192.168.1.100 from 00:11:22:33:44:55
+```
+
+The router-events service automatically parses these messages to extract:
+- Action (assigned/deassigned)
+- IP address
+- MAC address
+- Hostname (if present)
 
 ## License
 
