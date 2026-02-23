@@ -26,6 +26,7 @@ class Device(Base):
     mac = Column(String(17), primary_key=True)
     name = Column(String(255), nullable=True)
     notify = Column(Boolean, default=False)
+    last_ip = Column(String(45), nullable=True)
     manufacturer = Column(String(255), nullable=True)
     manufacturer_status = Column(
         SQLEnum(ManufacturerStatus, values_callable=lambda obj: [e.value for e in obj]),

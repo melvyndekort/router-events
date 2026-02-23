@@ -116,12 +116,12 @@ async def process_device_event(mac: str, ip: str, host: str, action: str = "assi
     device = await db.get_device(mac)
 
     if not device:
-        await db.add_device(mac, host or None)
+        await db.add_device(mac, host or None, ip)
         await notifier.notify_unknown_device(mac, ip, host, action)
         logger.info("New device: %s (%s) -> %s [%s]", mac, host or 'unknown', ip, action)
     else:
         device_name = get_device_attr(device, 'name')
-        await db.add_device(mac, host or device_name)
+        await db.add_device(mac, host or device_name, ip)
 
         if get_device_attr(device, 'notify', False):
             name = device_name or host or 'Unknown'

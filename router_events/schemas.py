@@ -28,6 +28,7 @@ class DeviceResponse(BaseModel):
     mac: str
     name: Optional[str] = None
     notify: bool = False
+    last_ip: Optional[str] = None
     first_seen: datetime
     last_seen: datetime
 

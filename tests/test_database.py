@@ -82,7 +82,7 @@ class TestDatabase:
         db.session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         db.session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
         
-        result = await db.add_device("00:11:22:33:44:55", "Test Device")
+        result = await db.add_device("00:11:22:33:44:55", "Test Device", "192.168.1.100")
         
         mock_session.add.assert_called_once()
         mock_session.commit.assert_called_once()
@@ -106,9 +106,10 @@ class TestDatabase:
         db.session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
         db.session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
         
-        result = await db.add_device("00:11:22:33:44:55", "New Name")
+        result = await db.add_device("00:11:22:33:44:55", "New Name", "192.168.1.101")
         
         assert result.last_seen == mock_now
+        assert result.last_ip == "192.168.1.101"
         assert result.name == "Old Name"  # Should not overwrite existing name
         mock_session.commit.assert_called_once()
 

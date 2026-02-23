@@ -35,6 +35,7 @@
                             <th>MAC Address</th>
                             <th>Manufacturer</th>
                             <th>Name</th>
+                            <th>Last IP</th>
                             <th>Notify</th>
                             <th>First Seen</th>
                             <th>Last Seen</th>
@@ -119,7 +120,9 @@
                     });
                     nameCell.appendChild(nameInput);
                     
-                    const notifyCell = row.insertCell(3);
+                    row.insertCell(3).innerHTML = `<code>${device.last_ip || '-'}</code>`;
+                    
+                    const notifyCell = row.insertCell(4);
                     const notifyCheckbox = document.createElement('input');
                     notifyCheckbox.type = 'checkbox';
                     notifyCheckbox.className = 'form-check-input';
@@ -129,10 +132,10 @@
                     });
                     notifyCell.appendChild(notifyCheckbox);
                     
-                    row.insertCell(4).textContent = new Date(device.first_seen).toLocaleString();
-                    row.insertCell(5).textContent = new Date(device.last_seen).toLocaleString();
+                    row.insertCell(5).textContent = new Date(device.first_seen).toLocaleString();
+                    row.insertCell(6).textContent = new Date(device.last_seen).toLocaleString();
                     
-                    const actionsCell = row.insertCell(6);
+                    const actionsCell = row.insertCell(7);
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = 'Delete';
                     deleteBtn.className = 'btn btn-danger btn-sm';

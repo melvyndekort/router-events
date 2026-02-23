@@ -49,19 +49,24 @@ class Database:
         if self.engine:
             await self.engine.dispose()
 
-    async def add_device(self, mac: str, name: Optional[str] = None) -> Device:
+    async def add_device(
+        self, mac: str, name: Optional[str] = None, ip: Optional[str] = None
+    ) -> Device:
         """Add or update device."""
         async with self.session_factory() as session:
             device = await session.get(Device, mac)
 
             if device:
                 device.last_seen = datetime.datetime.now()
+                if ip:
+                    device.last_ip = ip
                 if name and not device.name:
                     device.name = name
             else:
                 device = Device(
                     mac=mac,
                     name=name,
+                    last_ip=ip,
                     notify=False,
                     first_seen=datetime.datetime.now(),
                     last_seen=datetime.datetime.now()

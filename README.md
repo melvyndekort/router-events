@@ -89,6 +89,7 @@ Get all tracked devices.
       "mac": "00:11:22:33:44:55",
       "name": "My Device",
       "notify": true,
+      "last_ip": "192.168.1.100",
       "first_seen": "2024-01-01T10:00:00",
       "last_seen": "2024-01-01T12:00:00"
     }
@@ -105,6 +106,7 @@ Get specific device by MAC address.
   "mac": "00:11:22:33:44:55",
   "name": "My Device",
   "notify": true,
+  "last_ip": "192.168.1.100",
   "first_seen": "2024-01-01T10:00:00",
   "last_seen": "2024-01-01T12:00:00"
 }
@@ -197,6 +199,7 @@ The web interface displays:
 - MAC addresses of all tracked devices
 - Device manufacturers (looked up via MAC address)
 - Device names (or "Unknown" if not set) - editable inline
+- Last known IP address for each device
 - Notification status - toggle with checkbox
 - First and last seen timestamps
 - Delete buttons for removing devices (with confirmation)
