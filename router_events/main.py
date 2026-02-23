@@ -184,7 +184,7 @@ async def receive_event(request: Request):
 async def _process_single_event(data: dict):
     """Process a single event."""
     logger.info("Raw event data: %s", data)
-    
+
     # Parse syslog message if present
     if 'message' in data and 'action' not in data:
         # Vector syslog source already extracts appname, so message starts with action
