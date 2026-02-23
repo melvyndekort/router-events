@@ -367,6 +367,12 @@ dhcp-server assigned 192.168.1.100 for 00:11:22:33:44:55 hostname
 dhcp-server deassigned 192.168.1.100 from 00:11:22:33:44:55
 ```
 
+Vector's syslog source parses these messages and extracts the appname (`dhcp-server`) into a separate field. The `message` field sent to router-events contains:
+```
+assigned 192.168.1.100 for 00:11:22:33:44:55 hostname
+deassigned 192.168.1.100 from 00:11:22:33:44:55
+```
+
 The router-events service automatically parses these messages to extract:
 - Action (assigned/deassigned)
 - IP address

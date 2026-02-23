@@ -183,20 +183,26 @@ async def receive_event(request: Request):
 
 async def _process_single_event(data: dict):
     """Process a single event."""
+    logger.info("Raw event data: %s", data)
+    
     # Parse syslog message if present
     if 'message' in data and 'action' not in data:
-        pattern = (r'^([^ ]+) (assigned|deassigned) ([0-9.]+) '
+        # Vector syslog source already extracts appname, so message starts with action
+        pattern = (r'^(assigned|deassigned) ([0-9.]+) '
                   r'(?:for|from) ([0-9A-F:]+)(?: (.+))?$')
         match = re.match(pattern, data.get('message', ''))
         if match:
             data = {
-                'action': match.group(2),
-                'ip': match.group(3),
-                'mac': match.group(4),
-                'host': match.group(5) or ''
+                'action': match.group(1),
+                'ip': match.group(2),
+                'mac': match.group(3),
+                'host': match.group(4) or ''
             }
+            logger.info("Parsed event: %s", data)
+        else:
+            logger.warning("Failed to parse message: %s", data.get('message'))
 
-    logger.info("Received event: %s", data)
+    logger.info("Processing event: %s", data)
     action = data.get('action')
     if action and data.get('mac'):
         await process_device_event(

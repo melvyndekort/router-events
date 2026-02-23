@@ -164,11 +164,11 @@ class TestEndpoints:
 
     @patch('router_events.main.process_device_event')
     def test_receive_event_syslog_format(self, mock_process, client):
-        """Test receiving syslog format event."""
+        """Test receiving syslog format event (Vector already extracts appname)."""
         mock_process.return_value = AsyncMock()
         
         event = {
-            "message": "dhcp-data assigned 10.204.10.99 for AA:BB:CC:DD:EE:FF test-device"
+            "message": "assigned 10.204.10.99 for AA:BB:CC:DD:EE:FF test-device"
         }
         
         response = client.post("/api/events", json=event)
@@ -182,11 +182,11 @@ class TestEndpoints:
 
     @patch('router_events.main.process_device_event')
     def test_receive_event_syslog_format_no_hostname(self, mock_process, client):
-        """Test receiving syslog format event without hostname."""
+        """Test receiving syslog format event without hostname (Vector already extracts appname)."""
         mock_process.return_value = AsyncMock()
         
         event = {
-            "message": "dhcp-data assigned 10.204.10.99 for AA:BB:CC:DD:EE:FF"
+            "message": "assigned 10.204.10.99 for AA:BB:CC:DD:EE:FF"
         }
         
         response = client.post("/api/events", json=event)
