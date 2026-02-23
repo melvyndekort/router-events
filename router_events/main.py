@@ -1,6 +1,7 @@
 """Main FastAPI application for RouterOS event processing."""
 
 import asyncio
+import re
 import time
 import logging
 from contextlib import asynccontextmanager
@@ -166,12 +167,12 @@ async def receive_event(request: Request):
             return Response(status_code=204)
 
         data = await request.json()
-        
+
         # Parse syslog message if present
         if 'message' in data and 'action' not in data:
-            import re
-            match = re.match(r'^([^ ]+) (assigned|deassigned) ([0-9.]+) (?:for|from) ([0-9A-F:]+)(?: (.+))?$',
-                           data.get('message', ''))
+            pattern = (r'^([^ ]+) (assigned|deassigned) ([0-9.]+) '
+                      r'(?:for|from) ([0-9A-F:]+)(?: (.+))?$')
+            match = re.match(pattern, data.get('message', ''))
             if match:
                 data = {
                     'action': match.group(2),
@@ -179,7 +180,7 @@ async def receive_event(request: Request):
                     'mac': match.group(4),
                     'host': match.group(5) or ''
                 }
-        
+
         logger.info("Received event: %s", data)
         action = data.get('action')
         if action and data.get('mac'):
