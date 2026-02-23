@@ -216,6 +216,7 @@ async def get_devices():
             "mac": d.mac,
             "name": d.name,
             "notify": d.notify,
+            "last_ip": d.last_ip,
             "manufacturer": d.manufacturer,
             "manufacturer_status": (d.manufacturer_status.value 
                                    if d.manufacturer_status else "pending"),
@@ -237,6 +238,7 @@ async def get_device(mac: str):
         "mac": device.mac,
         "name": device.name,
         "notify": device.notify,
+        "last_ip": device.last_ip,
         "manufacturer": device.manufacturer,
         "manufacturer_status": (device.manufacturer_status.value 
                                if device.manufacturer_status else "pending"),
