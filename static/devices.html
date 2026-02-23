@@ -7,10 +7,15 @@
         .manufacturer { color: #adb5bd; font-size: 0.9em; }
         .editable-input { border: none; background: transparent; width: 100%; color: inherit; }
         .editable-input:focus { outline: 1px solid #0d6efd; background: #495057; }
+        th.sortable { cursor: pointer; user-select: none; }
+        th.sortable:hover { background: #495057; }
+        th.sortable::after { content: ' ⇅'; opacity: 0.3; }
+        th.sortable.asc::after { content: ' ↑'; opacity: 1; }
+        th.sortable.desc::after { content: ' ↓'; opacity: 1; }
     </style>
 </head>
 <body>
-    <div class="container mt-4">
+    <div class="container-fluid mt-4">
         <h1 class="mb-4">Router Events - Tracked Devices</h1>
         
         <div class="text-center mb-4">
@@ -32,13 +37,13 @@
                 <table class="table table-striped table-hover">
                     <thead class="table-dark">
                         <tr>
-                            <th>MAC Address</th>
-                            <th>Manufacturer</th>
-                            <th>Name</th>
-                            <th>Last IP</th>
-                            <th>Notify</th>
-                            <th>First Seen</th>
-                            <th>Last Seen</th>
+                            <th class="sortable" data-sort="mac">MAC Address</th>
+                            <th class="sortable" data-sort="manufacturer">Manufacturer</th>
+                            <th class="sortable" data-sort="name">Name</th>
+                            <th class="sortable" data-sort="last_ip">Last IP</th>
+                            <th class="sortable" data-sort="notify">Notify</th>
+                            <th class="sortable" data-sort="first_seen">First Seen</th>
+                            <th class="sortable" data-sort="last_seen">Last Seen</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -51,7 +56,93 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        let devices = [];
+        let sortColumn = 'last_seen';
+        let sortDirection = 'desc';
 
+        function sortDevices(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+            
+            devices.sort((a, b) => {
+                let aVal = a[column];
+                let bVal = b[column];
+                
+                if (aVal === null || aVal === undefined) aVal = '';
+                if (bVal === null || bVal === undefined) bVal = '';
+                
+                if (column === 'first_seen' || column === 'last_seen') {
+                    aVal = new Date(aVal);
+                    bVal = new Date(bVal);
+                }
+                
+                if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+                if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+                return 0;
+            });
+            
+            renderDevices();
+        }
+
+        function renderDevices() {
+            const tbody = document.getElementById('devicesBody');
+            tbody.innerHTML = '';
+            
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.classList.remove('asc', 'desc');
+                if (th.dataset.sort === sortColumn) {
+                    th.classList.add(sortDirection);
+                }
+            });
+            
+            for (const device of devices) {
+                const row = tbody.insertRow();
+                row.insertCell(0).innerHTML = `<code>${device.mac}</code>`;
+                
+                const manufacturerCell = row.insertCell(1);
+                manufacturerCell.innerHTML = `<span class="manufacturer">${device.manufacturer || ''} (${device.manufacturer_status})</span>`;
+                
+                const nameCell = row.insertCell(2);
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.className = 'editable-input';
+                nameInput.value = device.name || '';
+                nameInput.placeholder = 'Unknown';
+                nameInput.addEventListener('blur', () => {
+                    updateDevice(device.mac, 'name', nameInput.value || null);
+                });
+                nameInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') nameInput.blur();
+                });
+                nameCell.appendChild(nameInput);
+                
+                row.insertCell(3).innerHTML = `<code>${device.last_ip || '-'}</code>`;
+                
+                const notifyCell = row.insertCell(4);
+                const notifyCheckbox = document.createElement('input');
+                notifyCheckbox.type = 'checkbox';
+                notifyCheckbox.className = 'form-check-input';
+                notifyCheckbox.checked = device.notify;
+                notifyCheckbox.addEventListener('change', () => {
+                    updateDevice(device.mac, 'notify', notifyCheckbox.checked);
+                });
+                notifyCell.appendChild(notifyCheckbox);
+                
+                row.insertCell(5).textContent = new Date(device.first_seen).toLocaleString();
+                row.insertCell(6).textContent = new Date(device.last_seen).toLocaleString();
+                
+                const actionsCell = row.insertCell(7);
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.className = 'btn btn-danger btn-sm';
+                deleteBtn.onclick = () => deleteDevice(device.mac);
+                actionsCell.appendChild(deleteBtn);
+            }
+        }
 
         async function updateDevice(mac, field, value) {
             try {
@@ -96,52 +187,8 @@
                 const response = await fetch('/api/devices');
                 const data = await response.json();
                 
-                const tbody = document.getElementById('devicesBody');
-                tbody.innerHTML = '';
-                
-                for (const device of data.devices) {
-                    const row = tbody.insertRow();
-                    row.insertCell(0).innerHTML = `<code>${device.mac}</code>`;
-                    
-                    const manufacturerCell = row.insertCell(1);
-                    manufacturerCell.innerHTML = `<span class="manufacturer">${device.manufacturer || ''} (${device.manufacturer_status})</span>`;
-                    
-                    const nameCell = row.insertCell(2);
-                    const nameInput = document.createElement('input');
-                    nameInput.type = 'text';
-                    nameInput.className = 'editable-input';
-                    nameInput.value = device.name || '';
-                    nameInput.placeholder = 'Unknown';
-                    nameInput.addEventListener('blur', () => {
-                        updateDevice(device.mac, 'name', nameInput.value || null);
-                    });
-                    nameInput.addEventListener('keypress', (e) => {
-                        if (e.key === 'Enter') nameInput.blur();
-                    });
-                    nameCell.appendChild(nameInput);
-                    
-                    row.insertCell(3).innerHTML = `<code>${device.last_ip || '-'}</code>`;
-                    
-                    const notifyCell = row.insertCell(4);
-                    const notifyCheckbox = document.createElement('input');
-                    notifyCheckbox.type = 'checkbox';
-                    notifyCheckbox.className = 'form-check-input';
-                    notifyCheckbox.checked = device.notify;
-                    notifyCheckbox.addEventListener('change', () => {
-                        updateDevice(device.mac, 'notify', notifyCheckbox.checked);
-                    });
-                    notifyCell.appendChild(notifyCheckbox);
-                    
-                    row.insertCell(5).textContent = new Date(device.first_seen).toLocaleString();
-                    row.insertCell(6).textContent = new Date(device.last_seen).toLocaleString();
-                    
-                    const actionsCell = row.insertCell(7);
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.textContent = 'Delete';
-                    deleteBtn.className = 'btn btn-danger btn-sm';
-                    deleteBtn.onclick = () => deleteDevice(device.mac);
-                    actionsCell.appendChild(deleteBtn);
-                }
+                devices = data.devices;
+                sortDevices(sortColumn);
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('devicesTable').style.display = 'block';
@@ -184,6 +231,12 @@
                 btn.textContent = 'Retry All Failed Lookups';
             }
         }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('th.sortable').forEach(th => {
+                th.addEventListener('click', () => sortDevices(th.dataset.sort));
+            });
+        });
         
         loadDevices();
         setInterval(loadDevices, 30000);
