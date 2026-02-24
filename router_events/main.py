@@ -153,6 +153,12 @@ async def root():
     return RedirectResponse(url="/devices.html")
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    """Serve favicon."""
+    return FileResponse("static/favicon.ico")
+
+
 @app.get("/devices.html")
 async def devices_page():
     """Serve devices HTML page."""
