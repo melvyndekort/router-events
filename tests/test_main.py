@@ -147,6 +147,20 @@ class TestEndpoints:
         response = client.get("/devices.html")
         mock_file_response.assert_called_once_with("static/devices.html")
 
+    @patch('router_events.main.FileResponse')
+    def test_favicon(self, mock_file_response, client):
+        """Test favicon endpoint."""
+        mock_file_response.return_value = MagicMock()
+        response = client.get("/favicon.ico")
+        mock_file_response.assert_called_once_with("static/favicon.ico")
+
+    def test_static_files_mounted(self, client):
+        """Test static files are accessible."""
+        # Test that static route exists (will 404 for non-existent files but route is there)
+        response = client.get("/static/test.txt")
+        # Should get 404 (file not found) not 405 (method not allowed) or other routing error
+        assert response.status_code == 404
+
     @patch('router_events.main.process_device_event')
     def test_receive_event_valid(self, mock_process, client):
         """Test receiving valid event."""

@@ -11,6 +11,7 @@ import uvicorn
 import httpx
 from fastapi import FastAPI, Request, Response, HTTPException, BackgroundTasks
 from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .database import db
 from .notifications import notifier
@@ -145,6 +146,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan
 )
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/")
