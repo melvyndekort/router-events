@@ -68,15 +68,18 @@
                 sortColumn = column;
                 sortDirection = 'asc';
             }
-            
+            applySorting();
+        }
+
+        function applySorting() {
             devices.sort((a, b) => {
-                let aVal = a[column];
-                let bVal = b[column];
+                let aVal = a[sortColumn];
+                let bVal = b[sortColumn];
                 
                 if (aVal === null || aVal === undefined) aVal = '';
                 if (bVal === null || bVal === undefined) bVal = '';
                 
-                if (column === 'first_seen' || column === 'last_seen') {
+                if (sortColumn === 'first_seen' || sortColumn === 'last_seen') {
                     aVal = new Date(aVal);
                     bVal = new Date(bVal);
                 }
@@ -189,7 +192,7 @@
                 const data = await response.json();
                 
                 devices = data.devices;
-                sortDevices(sortColumn);
+                applySorting();
                 
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('devicesTable').style.display = 'block';
@@ -240,7 +243,6 @@
         });
         
         loadDevices();
-        setInterval(loadDevices, 30000);
     </script>
 </body>
 </html>

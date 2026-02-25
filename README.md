@@ -203,7 +203,6 @@ The web interface displays:
 - Notification status - toggle with checkbox
 - First and last seen timestamps
 - Delete buttons for removing devices (with confirmation)
-- Auto-refreshes every 30 seconds
 
 Access the web interface at `http://your-server:13959/` after starting the service.
 
