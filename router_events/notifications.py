@@ -1,4 +1,4 @@
-"""Notification service via ntfy."""
+"""Notification service via Apprise API."""
 
 import os
 import logging
@@ -10,29 +10,33 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationService:
-    """Simple notification service using ntfy."""
+    """Simple notification service using Apprise API."""
 
     def __init__(self):
-        self.url = os.getenv('NTFY_URL', 'https://ntfy.sh')
-        self.topic = os.getenv('NTFY_TOPIC', 'router-events')
-        self.token = os.getenv('NTFY_TOKEN')
-        self.enabled = os.getenv('NTFY_ENABLED', 'true').lower() == 'true'
+        self.url = os.getenv('APPRISE_URL', 'http://apprise:8000')
+        self.tag = os.getenv('APPRISE_TAG', 'homelab')
+        self.key = os.getenv('APPRISE_KEY', 'apprise')
+        self.enabled = os.getenv('APPRISE_ENABLED', 'true').lower() == 'true'
 
-    async def send(self, title: str, message: str, priority: str = "default"):
-        """Send notification."""
+    async def send(self, title: str, message: str, priority: str = "default"):  # pylint: disable=unused-argument
+        """Send notification via Apprise API.
+        
+        Note: priority parameter kept for API compatibility but not used by Apprise.
+        """
         if not self.enabled:
             return
 
-        headers = {"Title": title, "Priority": priority}
-        if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+        payload = {
+            'title': title,
+            'body': message,
+            'tag': self.tag
+        }
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.post(
-                    f"{self.url}/{self.topic}",
-                    data=message,
-                    headers=headers
+                    f"{self.url.rstrip('/')}/notify/{self.key}",
+                    json=payload
                 )
                 response.raise_for_status()
                 logger.info("Notification sent: %s", title)
