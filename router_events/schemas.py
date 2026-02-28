@@ -29,6 +29,8 @@ class DeviceResponse(BaseModel):
     name: Optional[str] = None
     notify: bool = False
     last_ip: Optional[str] = None
+    online: bool = False
+    last_ping: Optional[datetime] = None
     first_seen: datetime
     last_seen: datetime
 

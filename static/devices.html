@@ -13,6 +13,8 @@
         th.sortable::after { content: ' ⇅'; opacity: 0.3; }
         th.sortable.asc::after { content: ' ↑'; opacity: 1; }
         th.sortable.desc::after { content: ' ↓'; opacity: 1; }
+        .status-online { color: #198754; font-size: 1.5em; }
+        .status-offline { color: #dc3545; font-size: 1.5em; }
     </style>
 </head>
 <body>
@@ -42,6 +44,7 @@
                             <th class="sortable" data-sort="manufacturer">Manufacturer</th>
                             <th class="sortable" data-sort="name">Name</th>
                             <th class="sortable" data-sort="last_ip">Last IP</th>
+                            <th class="sortable" data-sort="online">Status</th>
                             <th class="sortable" data-sort="notify">Notify</th>
                             <th class="sortable" data-sort="first_seen">First Seen</th>
                             <th class="sortable" data-sort="last_seen">Last Seen</th>
@@ -126,7 +129,11 @@
                 
                 row.insertCell(3).innerHTML = `<code>${device.last_ip || '-'}</code>`;
                 
-                const notifyCell = row.insertCell(4);
+                const statusCell = row.insertCell(4);
+                const statusClass = device.online ? 'status-online' : 'status-offline';
+                statusCell.innerHTML = `<span class="${statusClass}">●</span>`;
+                
+                const notifyCell = row.insertCell(5);
                 const notifyCheckbox = document.createElement('input');
                 notifyCheckbox.type = 'checkbox';
                 notifyCheckbox.className = 'form-check-input';
