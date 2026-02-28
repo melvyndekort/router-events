@@ -5,7 +5,7 @@ import re
 import time
 import logging
 from contextlib import asynccontextmanager
-from typing import Set
+from typing import Set, Dict
 
 import uvicorn
 import httpx
@@ -38,6 +38,8 @@ class RateLimiter:  # pylint: disable=too-few-public-methods
 # Global state
 rate_limiter = RateLimiter()
 pending_lookups: Set[str] = set()
+ping_failures: Dict[str, int] = {}  # Track consecutive ping failures
+monitor_task = None
 
 
 async def lookup_manufacturer(mac: str):
@@ -134,12 +136,81 @@ async def process_device_event(mac: str, ip: str, host: str, action: str = "assi
             logger.info("Tracked device IP changed: %s -> %s [%s]", name, ip, action)
 
 
+async def ping_device(ip: str) -> bool:
+    """Ping device to check if online."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            'ping', '-c', '1', '-W', '2', ip,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL
+        )
+        await proc.wait()
+        return proc.returncode == 0
+    except Exception as e:  # pylint: disable=broad-exception-caught
+        logger.error("Ping error for %s: %s", ip, e)
+        return False
+
+
+async def monitor_devices_iteration():
+    """Single iteration of device monitoring."""
+    devices = await db.get_monitored_devices()
+    logger.debug("Monitoring %d devices", len(devices))
+
+    for device in devices:
+        if not device.last_ip:
+            continue
+
+        is_online = await ping_device(device.last_ip)
+
+        if is_online:
+            # Reset failure counter on success
+            ping_failures.pop(device.mac, None)
+            if not device.online:
+                await db.update_device_online_status(device.mac, True)
+                logger.info("Device %s (%s) is now online", device.mac, device.last_ip)
+        else:
+            # Increment failure counter
+            failures = ping_failures.get(device.mac, 0) + 1
+            ping_failures[device.mac] = failures
+
+            # Mark offline after 2 consecutive failures
+            if failures >= 2 and device.online:
+                await db.update_device_online_status(device.mac, False)
+                logger.info("Device %s (%s) is now offline", device.mac, device.last_ip)
+
+
+async def monitor_devices_task():
+    """Background task to monitor device online status."""
+    logger.info("Device monitoring task started")
+
+    while True:
+        try:
+            await asyncio.sleep(300)  # 5 minutes
+            await monitor_devices_iteration()
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            logger.error("Error in monitoring task: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Application lifecycle management."""
+    global monitor_task  # pylint: disable=global-statement
     logger.info("Starting RouterOS Event Receiver")
     await db.connect()
+
+    # Start monitoring task
+    monitor_task = asyncio.create_task(monitor_devices_task())
+
     yield
+
+    # Stop monitoring task
+    if monitor_task:
+        monitor_task.cancel()
+        try:
+            await monitor_task
+        except asyncio.CancelledError:
+            pass
+
     await db.close()
     logger.info("Application stopped")
 
@@ -237,8 +308,10 @@ async def get_devices():
             "notify": d.notify,
             "last_ip": d.last_ip,
             "manufacturer": d.manufacturer,
-            "manufacturer_status": (d.manufacturer_status.value 
+            "manufacturer_status": (d.manufacturer_status.value
                                    if d.manufacturer_status else "pending"),
+            "online": d.online,
+            "last_ping": d.last_ping,
             "first_seen": d.first_seen,
             "last_seen": d.last_seen
         }
@@ -259,8 +332,10 @@ async def get_device(mac: str):
         "notify": device.notify,
         "last_ip": device.last_ip,
         "manufacturer": device.manufacturer,
-        "manufacturer_status": (device.manufacturer_status.value 
+        "manufacturer_status": (device.manufacturer_status.value
                                if device.manufacturer_status else "pending"),
+        "online": device.online,
+        "last_ping": device.last_ping,
         "first_seen": device.first_seen,
         "last_seen": device.last_seen
     }

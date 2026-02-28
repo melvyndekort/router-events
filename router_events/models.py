@@ -33,6 +33,8 @@ class Device(Base):
         default=ManufacturerStatus.PENDING
     )
     manufacturer_last_attempt = Column(DateTime, nullable=True)
+    online = Column(Boolean, default=False)
+    last_ping = Column(DateTime, nullable=True)
     first_seen = Column(DateTime, server_default=text('CURRENT_TIMESTAMP'))
     last_seen = Column(
         DateTime,

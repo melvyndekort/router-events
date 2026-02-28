@@ -1,5 +1,6 @@
 """Tests for the main FastAPI application."""
 
+import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi.testclient import TestClient
@@ -23,6 +24,8 @@ def mock_device():
     device.mac = "00:11:22:33:44:55"
     device.name = "Test Device"
     device.notify = True
+    device.online = False
+    device.last_ping = None
     device.first_seen = datetime(2024, 1, 1, 10, 0, 0)
     device.last_seen = datetime(2024, 1, 1, 12, 0, 0)
     return device
@@ -245,6 +248,8 @@ class TestEndpoints:
         assert "devices" in data
         assert len(data["devices"]) == 1
         assert data["devices"][0]["mac"] == "00:11:22:33:44:55"
+        assert "online" in data["devices"][0]
+        assert "last_ping" in data["devices"][0]
 
     @patch('router_events.main.db')
     def test_get_device_found(self, mock_db, client, mock_device):
@@ -256,6 +261,8 @@ class TestEndpoints:
         data = response.json()
         assert data["mac"] == "00:11:22:33:44:55"
         assert data["name"] == "Test Device"
+        assert "online" in data
+        assert "last_ping" in data
 
     @patch('router_events.main.db')
     def test_get_device_not_found(self, mock_db, client):
@@ -458,5 +465,160 @@ class TestManufacturerLookup:
         await lookup_manufacturer("00:11:22:33:44:55")
         
         mock_db.set_manufacturer.assert_any_call("00:11:22:33:44:55", 'Unknown', 'unknown')
+
+
+class TestDeviceMonitoring:
+    """Test device monitoring functionality."""
+
+    @patch('asyncio.create_subprocess_exec')
+    @pytest.mark.asyncio
+    async def test_ping_device_success(self, mock_subprocess):
+        """Test successful ping."""
+        from router_events.main import ping_device
+        
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_proc.wait = AsyncMock()
+        mock_subprocess.return_value = mock_proc
+        
+        result = await ping_device("192.168.1.100")
+        
+        assert result is True
+        mock_subprocess.assert_called_once()
+
+    @patch('asyncio.create_subprocess_exec')
+    @pytest.mark.asyncio
+    async def test_ping_device_failure(self, mock_subprocess):
+        """Test failed ping."""
+        from router_events.main import ping_device
+        
+        mock_proc = MagicMock()
+        mock_proc.returncode = 1
+        mock_proc.wait = AsyncMock()
+        mock_subprocess.return_value = mock_proc
+        
+        result = await ping_device("192.168.1.100")
+        
+        assert result is False
+
+    @patch('asyncio.create_subprocess_exec')
+    @pytest.mark.asyncio
+    async def test_ping_device_exception(self, mock_subprocess):
+        """Test ping with exception."""
+        from router_events.main import ping_device
+        
+        mock_subprocess.side_effect = Exception("Network error")
+        
+        result = await ping_device("192.168.1.100")
+        
+        assert result is False
+
+    @patch('router_events.main.db')
+    @patch('router_events.main.ping_device')
+    @patch('router_events.main.ping_failures', {})
+    @pytest.mark.asyncio
+    async def test_monitor_iteration_device_online(self, mock_ping, mock_db):
+        """Test monitoring iteration marks device online."""
+        from router_events.main import monitor_devices_iteration, ping_failures
+        
+        device = MagicMock()
+        device.mac = "aa:bb:cc:dd:ee:ff"
+        device.last_ip = "192.168.1.100"
+        device.online = False
+        
+        mock_db.get_monitored_devices = AsyncMock(return_value=[device])
+        mock_db.update_device_online_status = AsyncMock()
+        mock_ping.return_value = True
+        
+        await monitor_devices_iteration()
+        
+        assert "aa:bb:cc:dd:ee:ff" not in ping_failures
+        mock_db.update_device_online_status.assert_called_with("aa:bb:cc:dd:ee:ff", True)
+
+    @patch('router_events.main.db')
+    @patch('router_events.main.ping_device')
+    @patch('router_events.main.ping_failures', {})
+    @pytest.mark.asyncio
+    async def test_monitor_iteration_offline_grace_period(self, mock_ping, mock_db):
+        """Test monitoring iteration respects grace period."""
+        from router_events.main import monitor_devices_iteration, ping_failures
+        
+        device = MagicMock()
+        device.mac = "aa:bb:cc:dd:ee:ff"
+        device.last_ip = "192.168.1.100"
+        device.online = True
+        
+        mock_db.get_monitored_devices = AsyncMock(return_value=[device])
+        mock_db.update_device_online_status = AsyncMock()
+        mock_ping.return_value = False
+        
+        await monitor_devices_iteration()
+        
+        assert ping_failures.get("aa:bb:cc:dd:ee:ff") == 1
+        mock_db.update_device_online_status.assert_not_called()
+
+    @patch('router_events.main.db')
+    @patch('router_events.main.ping_device')
+    @pytest.mark.asyncio
+    async def test_monitor_iteration_offline_after_grace(self, mock_ping, mock_db):
+        """Test monitoring iteration marks offline after grace period."""
+        from router_events.main import monitor_devices_iteration, ping_failures
+        
+        # Pre-populate with 1 failure
+        ping_failures["aa:bb:cc:dd:ee:ff"] = 1
+        
+        device = MagicMock()
+        device.mac = "aa:bb:cc:dd:ee:ff"
+        device.last_ip = "192.168.1.100"
+        device.online = True
+        
+        mock_db.get_monitored_devices = AsyncMock(return_value=[device])
+        mock_db.update_device_online_status = AsyncMock()
+        mock_ping.return_value = False
+        
+        await monitor_devices_iteration()
+        
+        assert ping_failures.get("aa:bb:cc:dd:ee:ff") == 2
+        mock_db.update_device_online_status.assert_called_with("aa:bb:cc:dd:ee:ff", False)
+
+    @patch('router_events.main.db')
+    @patch('router_events.main.ping_device')
+    @pytest.mark.asyncio
+    async def test_monitor_iteration_no_ip(self, mock_ping, mock_db):
+        """Test monitoring iteration skips devices without IP."""
+        from router_events.main import monitor_devices_iteration
+        
+        device = MagicMock()
+        device.mac = "aa:bb:cc:dd:ee:ff"
+        device.last_ip = None
+        
+        mock_db.get_monitored_devices = AsyncMock(return_value=[device])
+        mock_db.update_device_online_status = AsyncMock()
+        
+        await monitor_devices_iteration()
+        
+        mock_ping.assert_not_called()
+
+    @patch('router_events.main.db')
+    @patch('router_events.main.ping_device')
+    @patch('router_events.main.ping_failures', {"aa:bb:cc:dd:ee:ff": 3})
+    @pytest.mark.asyncio
+    async def test_monitor_iteration_online_clears_failures(self, mock_ping, mock_db):
+        """Test monitoring iteration clears failure count on success."""
+        from router_events.main import monitor_devices_iteration, ping_failures
+        
+        device = MagicMock()
+        device.mac = "aa:bb:cc:dd:ee:ff"
+        device.last_ip = "192.168.1.100"
+        device.online = True
+        
+        mock_db.get_monitored_devices = AsyncMock(return_value=[device])
+        mock_db.update_device_online_status = AsyncMock()
+        mock_ping.return_value = True
+        
+        await monitor_devices_iteration()
+        
+        assert "aa:bb:cc:dd:ee:ff" not in ping_failures
+        mock_db.update_device_online_status.assert_not_called()  # Already online
 
 

@@ -216,5 +216,23 @@ class Database:
             )
             await session.commit()
 
+    async def get_monitored_devices(self) -> List[Device]:
+        """Get all devices with notify=True."""
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(Device).where(Device.notify == True)  # pylint: disable=singleton-comparison
+            )
+            return list(result.scalars().all())
+
+    async def update_device_online_status(self, mac: str, online: bool):
+        """Update device online status."""
+        async with self.session_factory() as session:
+            await session.execute(
+                update(Device)
+                .where(Device.mac == mac)
+                .values(online=online, last_ping=datetime.datetime.now())
+            )
+            await session.commit()
+
 
 db = Database()

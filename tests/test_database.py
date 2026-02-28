@@ -377,3 +377,46 @@ class TestDatabase:
         
         mock_session.execute.assert_called_once()
         mock_session.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_monitored_devices(self):
+        """Test getting monitored devices."""
+        db = Database()
+        mock_session = MagicMock()
+        
+        device1 = Device(mac="aa:bb:cc:dd:ee:ff", notify=True)
+        device2 = Device(mac="11:22:33:44:55:66", notify=True)
+        
+        mock_result = MagicMock()
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = [device1, device2]
+        mock_result.scalars.return_value = mock_scalars
+        
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        
+        db.session_factory = MagicMock()
+        db.session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        db.session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+        
+        devices = await db.get_monitored_devices()
+        
+        assert len(devices) == 2
+        assert devices[0].mac == "aa:bb:cc:dd:ee:ff"
+        assert devices[1].mac == "11:22:33:44:55:66"
+
+    @pytest.mark.asyncio
+    async def test_update_device_online_status(self):
+        """Test updating device online status."""
+        db = Database()
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock()
+        mock_session.commit = AsyncMock()
+        
+        db.session_factory = MagicMock()
+        db.session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        db.session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
+        
+        await db.update_device_online_status("aa:bb:cc:dd:ee:ff", True)
+        
+        mock_session.execute.assert_called_once()
+        mock_session.commit.assert_called_once()
