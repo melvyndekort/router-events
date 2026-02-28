@@ -117,17 +117,21 @@ async def process_device_event(mac: str, ip: str, host: str, action: str = "assi
     device = await db.get_device(mac)
 
     if not device:
-        await db.add_device(mac, host or None, ip)
+        await db.add_device(mac, host or None, ip if action == "assigned" else None)
         await notifier.notify_unknown_device(mac, ip, host, action)
         logger.info("New device: %s (%s) -> %s [%s]", mac, host or 'unknown', ip, action)
     else:
         device_name = get_device_attr(device, 'name')
-        await db.add_device(mac, host or device_name, ip)
+        last_ip = get_device_attr(device, 'last_ip')
 
-        if get_device_attr(device, 'notify', False):
+        # Only update last_ip on assign events to preserve it for comparison
+        new_ip = ip if action == "assigned" else last_ip
+        await db.add_device(mac, host or device_name, new_ip)
+
+        if get_device_attr(device, 'notify', False) and action == "assigned" and ip != last_ip:
             name = device_name or host or 'Unknown'
             await notifier.notify_tracked_device(name, mac, ip, action)
-            logger.info("Tracked device: %s -> %s [%s]", name, ip, action)
+            logger.info("Tracked device IP changed: %s -> %s [%s]", name, ip, action)
 
 
 @asynccontextmanager
