@@ -585,14 +585,11 @@ class TestDeviceMonitoring:
     @patch('router_events.main.ping_device')
     @pytest.mark.asyncio
     async def test_monitor_iteration_no_ip(self, mock_ping, mock_db):
-        """Test monitoring iteration skips devices without IP."""
+        """Test monitoring iteration with no devices (filtered at DB level)."""
         from router_events.main import monitor_devices_iteration
         
-        device = MagicMock()
-        device.mac = "aa:bb:cc:dd:ee:ff"
-        device.last_ip = None
-        
-        mock_db.get_monitored_devices = AsyncMock(return_value=[device])
+        # Database now filters out devices without IPs
+        mock_db.get_monitored_devices = AsyncMock(return_value=[])
         mock_db.update_device_online_status = AsyncMock()
         
         await monitor_devices_iteration()

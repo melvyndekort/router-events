@@ -18,6 +18,7 @@ from .notifications import notifier
 from .schemas import DeviceUpdateRequest, UpdateResponse
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 class RateLimiter:  # pylint: disable=too-few-public-methods
@@ -126,8 +127,8 @@ async def process_device_event(mac: str, ip: str, host: str, action: str = "assi
         device_name = get_device_attr(device, 'name')
         last_ip = get_device_attr(device, 'last_ip')
 
-        # Only update last_ip on assign events to preserve it for comparison
-        new_ip = ip if action == "assigned" else last_ip
+        # Set last_ip on assign, clear it on deassign
+        new_ip = ip if action == "assigned" else None
         await db.add_device(mac, host or device_name, new_ip)
 
         if get_device_attr(device, 'notify', False) and action == "assigned" and ip != last_ip:
@@ -156,10 +157,8 @@ async def monitor_devices_iteration():
     devices = await db.get_monitored_devices()
     logger.debug("Monitoring %d devices", len(devices))
 
-    for device in devices:
-        if not device.last_ip:
-            continue
-
+    # Ping all devices concurrently
+    async def check_device(device):
         is_online = await ping_device(device.last_ip)
 
         if is_online:
@@ -178,6 +177,12 @@ async def monitor_devices_iteration():
                 await db.update_device_online_status(device.mac, False)
                 logger.info("Device %s (%s) is now offline", device.mac, device.last_ip)
 
+        return is_online
+
+    results = await asyncio.gather(*[check_device(device) for device in devices])
+    online_count = sum(results)
+    logger.info("Monitoring complete: %d/%d devices online", online_count, len(devices))
+
 
 async def monitor_devices_task():
     """Background task to monitor device online status."""
@@ -185,8 +190,8 @@ async def monitor_devices_task():
 
     while True:
         try:
-            await asyncio.sleep(300)  # 5 minutes
             await monitor_devices_iteration()
+            await asyncio.sleep(300)  # 5 minutes
         except Exception as e:  # pylint: disable=broad-exception-caught
             logger.error("Error in monitoring task: %s", e)
 

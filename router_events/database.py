@@ -217,10 +217,10 @@ class Database:
             await session.commit()
 
     async def get_monitored_devices(self) -> List[Device]:
-        """Get all devices with notify=True."""
+        """Get all devices with an IP address."""
         async with self.session_factory() as session:
             result = await session.execute(
-                select(Device).where(Device.notify == True)  # pylint: disable=singleton-comparison
+                select(Device).where(Device.last_ip.isnot(None))
             )
             return list(result.scalars().all())
 

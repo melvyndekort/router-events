@@ -17,6 +17,8 @@ FROM python:3.12-slim AS runtime
 
 LABEL org.opencontainers.image.source=https://github.com/melvyndekort/router-events
 
+RUN apt-get update && apt-get install -y --no-install-recommends iputils-ping && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build /venv /venv
 COPY static /static
 

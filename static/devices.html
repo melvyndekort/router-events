@@ -143,10 +143,10 @@
                 });
                 notifyCell.appendChild(notifyCheckbox);
                 
-                row.insertCell(5).textContent = new Date(device.first_seen).toLocaleString();
-                row.insertCell(6).textContent = new Date(device.last_seen).toLocaleString();
+                row.insertCell(6).textContent = new Date(device.first_seen).toLocaleString();
+                row.insertCell(7).textContent = new Date(device.last_seen).toLocaleString();
                 
-                const actionsCell = row.insertCell(7);
+                const actionsCell = row.insertCell(8);
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = 'Delete';
                 deleteBtn.className = 'btn btn-danger btn-sm';

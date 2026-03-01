@@ -16,13 +16,14 @@ Events flow through the following pipeline:
 - Syslog message parsing for DHCP events
 - MariaDB/MySQL integration for device tracking with SQLAlchemy ORM
 - Automatic database schema creation
+- Device online/offline monitoring via concurrent ping checks every 5 minutes
 - ntfy notifications for unknown and tracked devices
 - Device management API for manual naming
 - Manufacturer lookup via MAC address with rate limiting
 - Web interface for device management
 - Health check endpoint for monitoring
 - Docker support for easy deployment
-- Comprehensive test suite with 97% coverage (107 tests)
+- Comprehensive test suite with 97% coverage (124 tests)
 - Code quality checks with pylint (10/10 score)
 
 ## Installation
@@ -200,6 +201,7 @@ The web interface displays:
 - Device manufacturers (looked up via MAC address)
 - Device names (or "Unknown" if not set) - editable inline
 - Last known IP address for each device
+- Online/offline status (updated every 5 minutes via ping)
 - Notification status - toggle with checkbox
 - First and last seen timestamps
 - Delete buttons for removing devices (with confirmation)
