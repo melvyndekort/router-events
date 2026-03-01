@@ -166,7 +166,7 @@ async def monitor_devices_iteration():
             ping_failures.pop(device.mac, None)
             if not device.online:
                 await db.update_device_online_status(device.mac, True)
-                logger.info("Device %s (%s) is now online", device.mac, device.last_ip)
+                logger.debug("Device %s (%s) is now online", device.mac, device.last_ip)
         else:
             # Increment failure counter
             failures = ping_failures.get(device.mac, 0) + 1
