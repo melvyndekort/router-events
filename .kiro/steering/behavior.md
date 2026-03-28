@@ -17,7 +17,7 @@ FastAPI service that receives and processes DHCP events from RouterOS devices vi
 - `static/` — Static HTML/assets (devices page, favicon)
 - `examples/` — Example data/configs
 - `Dockerfile` — Slim-based build (needs iputils-ping)
-- `Makefile` — `install`, `test`, `lint` (pylint), `build`, `full-build`, `dev`, `run`
+- `Makefile` — `install`, `test`, `lint`, `format` (pylint), `build`, `full-build`, `dev`, `run`
 
 ## Deployment
 
