@@ -19,6 +19,9 @@ build: test
 full-build: clean
 	@docker build -t router-events .
 
+lint: install
+	@uv run pylint router_events
+
 pylint:
 	@uv run pylint router_events
 
