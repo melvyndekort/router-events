@@ -22,11 +22,14 @@ full-build: clean
 lint: install
 	@uv run pylint router_events
 
-pylint:
-	@uv run pylint router_events
+pylint: lint
 
 dev: install
 	@uv run python3 -m router_events.main
 
 run: install
 	@uv run uvicorn router_events.main:app --host 0.0.0.0 --port 13959 --reload
+
+format: install
+	@uv run ruff format .
+	@uv run ruff check --fix .
