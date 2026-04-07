@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mysql": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "MYSQL_HOST=compute-1.mdekort.nl MYSQL_PORT=3306 MYSQL_USER=$(pass mariadb/mcp-user) MYSQL_PASSWORD=$(pass mariadb/mcp-password) MYSQL_DATABASE=information_schema exec uvx --from mysql-mcp-server mysql_mcp_server"
+      ]
+    }
+  }
+}
