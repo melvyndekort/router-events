@@ -9,7 +9,7 @@ dependencies = [
     "uvicorn>=0.38",
     "pydantic>=2.13.0",
     "aiomysql>=0.3",
-    "httpx>=0.28",
+    "httpx>=0.28.1",
     "sqlalchemy>=2.0.49",
 ]
 
@@ -19,7 +19,7 @@ dev = [
     "pytest-cov>=7.0",
     "pytest-asyncio>=1.2.0",
     "pylint>=3.3.9",
-    "httpx>=0.28",
+    "httpx>=0.28.1",
 ]
 
 [tool.hatch.build.targets.wheel]
