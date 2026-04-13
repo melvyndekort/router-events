@@ -5,7 +5,7 @@ description = "RouterOS event receiver and processor"
 authors = [{name = "Melvyn de Kort", email = "melvyn@mdekort.nl"}]
 requires-python = ">=3.9"
 dependencies = [
-    "fastapi>=0.119",
+    "fastapi>=0.128.8",
     "uvicorn>=0.38",
     "pydantic>=2.12",
     "aiomysql>=0.3",
