@@ -1,6 +1,6 @@
 # router-events
 
-> For global standards, way-of-workings, and pre-commit checklist, see `~/.kiro/steering/behavior.md`
+> For global standards, way-of-workings, and pre-commit checklist, see `~/.claude/CLAUDE.md`
 
 ## Role
 
@@ -23,6 +23,10 @@ FastAPI service that receives and processes DHCP events from RouterOS devices vi
 
 - Container image: `ghcr.io/melvyndekort/router-events:latest`
 - Runs on homelab Docker via Portainer, exposed on port 13959
+
+## MCP servers
+
+This repo has a project-scoped `mysql` MCP server (`.mcp.json`) against the MariaDB instance this service writes to — see `~/.claude/references/mcp-catalog.md`.
 
 ## Related Repositories
 
