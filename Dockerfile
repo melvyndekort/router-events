@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS base
+FROM python:3.14-slim AS base
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
@@ -13,7 +13,7 @@ RUN uv sync --frozen --no-dev
 COPY router_events/ ./router_events/
 RUN uv build --wheel && pip install dist/*.whl
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 LABEL org.opencontainers.image.source=https://github.com/melvyndekort/router-events
 
